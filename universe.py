@@ -5,15 +5,31 @@ Sources are Wikipedia tables — stable, freely available, no API key required.
 Tickers are normalised for yfinance (dots replaced with dashes, e.g. BRK.B → BRK-B).
 """
 
+import io
 import logging
 from typing import List
 
 import pandas as pd
+import requests
 
 log = logging.getLogger(__name__)
 
 _SP500_URL = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
 _NDX100_URL = "https://en.wikipedia.org/wiki/Nasdaq-100"
+
+# Mimic a browser so Wikipedia doesn't block the request
+_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    )
+}
+
+
+def _get_html(url: str) -> str:
+    resp = requests.get(url, headers=_HEADERS, timeout=15)
+    resp.raise_for_status()
+    return resp.text
 
 
 def _normalise(ticker: str) -> str:
@@ -22,7 +38,8 @@ def _normalise(ticker: str) -> str:
 
 def _fetch_sp500() -> List[str]:
     try:
-        tables = pd.read_html(_SP500_URL, attrs={"id": "constituents"})
+        html = _get_html(_SP500_URL)
+        tables = pd.read_html(io.StringIO(html), attrs={"id": "constituents"})
         return [_normalise(t) for t in tables[0]["Symbol"].tolist()]
     except Exception as exc:
         log.warning("S&P 500 fetch failed: %s", exc)
@@ -31,9 +48,8 @@ def _fetch_sp500() -> List[str]:
 
 def _fetch_ndx100() -> List[str]:
     try:
-        # The Nasdaq-100 page has multiple tables; the constituents table
-        # contains a 'Ticker' column.
-        tables = pd.read_html(_NDX100_URL)
+        html = _get_html(_NDX100_URL)
+        tables = pd.read_html(io.StringIO(html))
         for tbl in tables:
             if "Ticker" in tbl.columns:
                 return [_normalise(t) for t in tbl["Ticker"].dropna().tolist()]
