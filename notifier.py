@@ -50,10 +50,8 @@ def _build_message(
     from datetime import datetime, timezone
     now = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
-    screened_line = ""
-    if total_screened:
-        sample = ", ".join(sample_tickers) if sample_tickers else ""
-        screened_line = f"_Screened {total_screened} stocks (e.g. {sample}, …)_\n"
+    sample = ", ".join(sample_tickers) if sample_tickers else "n/a"
+    screened_line = f"_Screened {total_screened} stocks (e.g. {sample}, ...)_\n"
 
     if aborted:
         return (
