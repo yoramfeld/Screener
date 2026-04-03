@@ -41,28 +41,46 @@ def _format_signal(sig: Signal) -> str:
     )
 
 
-def _build_message(signals: List[Signal], aborted: bool = False) -> str:
+def _build_message(
+    signals: List[Signal],
+    aborted: bool = False,
+    total_screened: int = 0,
+    sample_tickers: List[str] = [],
+) -> str:
     from datetime import datetime, timezone
     now = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
+    screened_line = ""
+    if total_screened:
+        sample = ", ".join(sample_tickers) if sample_tickers else ""
+        screened_line = f"_Screened {total_screened} stocks (e.g. {sample}, …)_\n"
+
     if aborted:
-        return f"🛑 *Swing Screener* — {now}\nRun aborted: SPY is in a sharp intraday sell-off. No alerts sent."
+        return (
+            f"🛑 *Swing Screener* — {now}\n"
+            f"{screened_line}"
+            f"Run aborted: SPY is in a sharp intraday sell-off. No alerts sent."
+        )
 
     if not signals:
-        return f"✅ *Swing Screener* — {now}\nNo SMA150 bounce setups found today."
+        return (
+            f"✅ *Swing Screener* — {now}\n"
+            f"{screened_line}"
+            f"No SMA150 bounce setups found today."
+        )
 
-    header = f"🔔 *Swing Screener* — {now}\n{len(signals)} setup(s) found:\n\n"
+    header = f"🔔 *Swing Screener* — {now}\n{screened_line}{len(signals)} setup(s) found:\n\n"
     body = "\n\n".join(_format_signal(s) for s in signals)
     return header + body
 
 
-def send(signals: List[Signal], aborted: bool = False) -> bool:
+def send(signals: List[Signal], aborted: bool = False, total_screened: int = 0, sample_tickers: List[str] = []) -> bool:
     """Send a Telegram message. Returns True on success."""
     if not config.TELEGRAM_BOT_TOKEN or not config.TELEGRAM_CHAT_ID:
         log.error("Telegram credentials not configured — skipping notification")
         return False
 
-    message = _build_message(signals, aborted=aborted)
+    message = _build_message(signals, aborted=aborted, total_screened=total_screened, sample_tickers=sample_tickers)
     url = _TELEGRAM_URL.format(token=config.TELEGRAM_BOT_TOKEN)
     payload = {
         "chat_id": config.TELEGRAM_CHAT_ID,

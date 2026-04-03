@@ -47,7 +47,7 @@ def main() -> None:
         database.mark_alerted(s["ticker"])
 
     # 6. Dispatch
-    notifier.send(new_signals)
+    notifier.send(new_signals, total_screened=len(tickers), sample_tickers=tickers[:3])
     log.info("Done — %d new signal(s) sent", len(new_signals))
 
 
