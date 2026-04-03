@@ -1,0 +1,37 @@
+name: Swing Screener
+
+on:
+  schedule:
+    - cron: '0 15 * * 1-5'   # 10:00 AM EST (15:00 UTC) — morning bounces
+    - cron: '30 20 * * 1-5'  # 3:30 PM EST  (20:30 UTC) — power hour confirmation
+  workflow_dispatch:           # manual trigger for testing
+
+jobs:
+  screen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Restore the dedup DB from the previous run so we don't re-alert
+      - name: Restore alert cache
+        uses: actions/cache@v4
+        with:
+          path: alerts.db
+          key: alerts-db-${{ github.run_id }}          # unique key forces a save each run
+          restore-keys: alerts-db-                      # restores the most recent prior cache
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run screener
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python main.py
