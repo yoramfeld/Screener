@@ -1,5 +1,6 @@
 yfinance>=0.2.40
 pandas>=2.0
 requests>=2.31
+flask>=3.0
 lxml>=5.0        # required by pandas.read_html for universe fetching
 html5lib>=1.1    # fallback parser for read_html
