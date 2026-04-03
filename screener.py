@@ -162,17 +162,15 @@ def _evaluate(ticker: str, df: pd.DataFrame) -> Optional[Signal]:
         return None
 
     close = float(df["Close"].iloc[-1])
-    open_ = float(df["Open"].iloc[-1])
     low = float(df["Low"].iloc[-1])
 
-    # 2. Bounce trigger — low tagged SMA, candle closed bullish
-    if not (low < sma_today and close > open_):
+    # 2. Touch — low came within PROXIMITY_CAP (3%) above SMA150
+    if not (low < sma_today * (1 + config.PROXIMITY_CAP)):
         return None
 
-    # 3. Proximity cap — close not more than PROXIMITY_CAP above SMA
+    # 3. Reversal — close recovered above low, above SMA150, within 3% of the low
     pct_from_sma = (close - sma_today) / sma_today
-    if pct_from_sma > config.PROXIMITY_CAP or pct_from_sma < 0:
-        # Negative means closed below SMA — we want touches that recovered above
+    if not (close > low and close > sma_today and close < low * (1 + config.PROXIMITY_CAP)):
         return None
 
     # 4. Volume filter — today vs 20-day average
