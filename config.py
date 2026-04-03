@@ -29,6 +29,10 @@ import os
 TELEGRAM_BOT_TOKEN: str = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID: str = os.environ.get("TELEGRAM_CHAT_ID", "")
 
+# --- Vercel webhook ---
+WEBHOOK_SECRET: str = os.environ.get("WEBHOOK_SECRET", "")  # any random string
+GITHUB_PAT: str = os.environ.get("GITHUB_PAT", "")          # needs 'actions' scope
+
 # --- SQLite dedup ---
 DB_PATH: str = os.environ.get("DB_PATH", "alerts.db")
 
