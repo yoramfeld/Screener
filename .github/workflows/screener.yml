@@ -3,7 +3,11 @@ name: Swing Screener
 on:
   schedule:
     - cron: '*/5 14-21 * * 1-5'  # every 5 min, 9:30 AM–4:00 PM EST (14:00–21:00 UTC)
-  workflow_dispatch:           # manual trigger for testing
+  workflow_dispatch:
+    inputs:
+      run_type:
+        description: 'screen | portfolio | pnl'
+        default: screen
 
 jobs:
   screen:
@@ -13,13 +17,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Restore the dedup DB from the previous run so we don't re-alert
       - name: Restore alert cache
         uses: actions/cache@v4
         with:
           path: alerts.db
-          key: alerts-db-${{ github.run_id }}          # unique key forces a save each run
-          restore-keys: alerts-db-                      # restores the most recent prior cache
+          key: alerts-db-${{ github.run_id }}
+          restore-keys: alerts-db-
 
       - uses: actions/setup-python@v5
         with:
@@ -29,8 +32,9 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run screener
+      - name: Run
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
+          RUN_TYPE:           ${{ github.event.inputs.run_type || 'screen' }}
         run: python run.py
