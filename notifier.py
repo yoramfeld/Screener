@@ -144,13 +144,16 @@ def send_portfolio(positions: List[Position]) -> None:
 
     lines = []
     for p in positions:
-        arrow   = "🟢" if p["pct_change"] >= 0 else "🔴"
-        sign    = "+" if p["pct_change"] >= 0 else ""
-        warning = "  ⚠️ STOP HIT" if p["stop_hit"] else ""
+        arrow      = "🟢" if p["pct_change"] >= 0 else "🔴"
+        sign       = "+" if p["pct_change"] >= 0 else ""
+        stop_pnl   = (p["stop"] - p["buy_price"]) / p["buy_price"] * 100
+        stop_sign  = "+" if stop_pnl >= 0 else ""
+        warning    = "  ⚠️ STOP HIT" if p["stop_hit"] else ""
         lines.append(
             f"{arrow} *{p['ticker']}* — entry ${p['buy_price']}  ({p['buy_date']})\n"
             f"  Now: ${p['current']} ({sign}{p['pct_change']}%)  "
-            f"|  SMA150: ${p['sma150']}  |  Stop: ${p['stop']}{warning}"
+            f"|  SMA150: ${p['sma150']}  "
+            f"|  Stop: ${p['stop']} ({stop_sign}{stop_pnl:.1f}%){warning}"
         )
 
     _post("📋 *Portfolio — Stop Levels*\n\n" + "\n\n".join(lines))
