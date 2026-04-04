@@ -144,21 +144,27 @@ def send_pnl(trades: list) -> None:
 
     lines = []
     for t in trades:
-        emoji = "🟢" if t["pct_pnl"] >= 0 else "🔴"
-        sign  = "+" if t["pct_pnl"] >= 0 else ""
+        emoji       = "🟢" if t["pct_pnl"] >= 0 else "🔴"
+        sign        = "+" if t["pct_pnl"] >= 0 else ""
+        dollar_sign = "+" if t["dollar_pnl"] >= 0 else ""
+        qty_str     = f"{t['quantity']:g} shares  " if t.get("quantity") else ""
         lines.append(
-            f"{emoji} *{t['ticker']}*\n"
+            f"{emoji} *{t['ticker']}*  {qty_str}\n"
             f"  Buy: ${t['buy_price']} ({t['buy_date']})  →  "
             f"Sell: ${t['sell_price']} ({t['sell_date']})\n"
-            f"  Profit: {sign}{t['pct_pnl']}%"
+            f"  Profit: {sign}{t['pct_pnl']}%  ({dollar_sign}${t['dollar_pnl']:,.2f})"
         )
 
-    total   = sum(t["pct_pnl"] for t in trades)
-    winners = sum(1 for t in trades if t["pct_pnl"] >= 0)
-    sign    = "+" if total >= 0 else ""
+    total_dollars  = sum(t["dollar_pnl"] for t in trades)
+    total_cost     = sum(t["buy_price"] * t["quantity"] for t in trades if t.get("quantity"))
+    weighted_pct   = (total_dollars / total_cost * 100) if total_cost else 0
+    winners        = sum(1 for t in trades if t["pct_pnl"] >= 0)
+    sign           = "+" if total_dollars >= 0 else ""
+    pct_sign       = "+" if weighted_pct >= 0 else ""
+
     summary = (
-        f"\n📊 *Total: {sign}{total:.1f}%* across {len(trades)} trade(s) "
-        f"({winners}W / {len(trades) - winners}L)"
+        f"\n📊 *Total: {sign}${total_dollars:,.2f} ({pct_sign}{weighted_pct:.1f}%)* "
+        f"across {len(trades)} trade(s) ({winners}W / {len(trades) - winners}L)"
     )
 
     _post("📒 *P&L History*\n\n" + "\n\n".join(lines) + summary)

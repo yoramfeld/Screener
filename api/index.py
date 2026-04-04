@@ -87,16 +87,21 @@ def webhook():
             _send_message("Failed to trigger the screener. Check GITHUB_PAT in Vercel env vars.")
 
     elif cmd == "/buy":
-        if len(parts) != 3:
-            _send_message("Usage: `/buy AAPL 182.40`")
+        if len(parts) != 4:
+            _send_message("Usage: `/buy AAPL 182.40 50`")
         else:
             try:
-                ticker = parts[1].upper()
-                price  = float(parts[2])
-                portfolio.add_position(ticker, price)
-                _send_message(f"✅ Recorded: *{ticker}* @ ${price:.2f}\nStop will be tracked with each screener run.")
+                ticker   = parts[1].upper()
+                price    = float(parts[2])
+                quantity = float(parts[3])
+                portfolio.add_position(ticker, price, quantity)
+                cost = price * quantity
+                _send_message(
+                    f"✅ Recorded: *{ticker}* {quantity:g} shares @ ${price:.2f} "
+                    f"(cost ${cost:,.2f})\nStop will be tracked with each screener run."
+                )
             except ValueError:
-                _send_message("Invalid price. Usage: `/buy AAPL 182.40`")
+                _send_message("Invalid input. Usage: `/buy AAPL 182.40 50`")
 
     elif cmd == "/sell":
         if len(parts) != 3:
@@ -107,13 +112,14 @@ def webhook():
                 sell_price = float(parts[2])
                 trade = portfolio.close_position(ticker, sell_price)
                 if trade:
-                    emoji = "🟢" if trade["pct_pnl"] >= 0 else "🔴"
-                    sign  = "+" if trade["pct_pnl"] >= 0 else ""
+                    emoji     = "🟢" if trade["pct_pnl"] >= 0 else "🔴"
+                    sign      = "+" if trade["pct_pnl"] >= 0 else ""
+                    dollar_sign = "+" if trade["dollar_pnl"] >= 0 else ""
                     _send_message(
                         f"{emoji} *{ticker}* closed\n"
-                        f"  Buy: ${trade['buy_price']} ({trade['buy_date']})\n"
+                        f"  Buy: ${trade['buy_price']} × {trade['quantity']:g} shares ({trade['buy_date']})\n"
                         f"  Sell: ${trade['sell_price']} ({trade['sell_date']})\n"
-                        f"  P&L: {sign}{trade['pct_pnl']}%"
+                        f"  P&L: {sign}{trade['pct_pnl']}% ({dollar_sign}${trade['dollar_pnl']:,.2f})"
                     )
                 else:
                     _send_message(f"*{ticker}* not found in portfolio.")
@@ -131,7 +137,7 @@ def webhook():
         _send_message(
             "Bot is active. Commands:\n"
             "`/run` — scan now\n"
-            "`/buy AAPL 182.40` — record a buy\n"
+            "`/buy AAPL 182.40 50` — record a buy (ticker, price, shares)\n"
             "`/sell AAPL 185.20` — record a sell + P&L\n"
             "`/portfolio` — open positions & stop levels\n"
             "`/pnl` — closed trades & total profit"
