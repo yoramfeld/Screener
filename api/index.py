@@ -201,6 +201,17 @@ def webhook():
                         f"{remain_line}"
                     )
 
+    elif cmd == "/delete":
+        if len(parts) < 2:
+            _send_message("Usage: `/delete AAPL`")
+        else:
+            import portfolio
+            ticker = parts[1].upper()
+            if portfolio.delete_position(ticker):
+                _send_message(f"🗑️ *{ticker}* removed from portfolio.")
+            else:
+                _send_message(f"❌ *{ticker}* not found in your portfolio.")
+
     elif cmd == "/portfolio":
         if _trigger("portfolio"):
             _send_message("📋 Fetching portfolio... one moment.")
@@ -223,6 +234,7 @@ def webhook():
             "`/buy AAPL 182.40 50` — record a buy\n"
             "`/sell AAPL 185.20` — sell all shares\n"
             "`/sell AAPL 185.20 30` — partial sell\n"
+            "`/delete AAPL` — remove a position without recording a trade\n"
             "`/portfolio` — open positions & stop levels\n"
             "`/pnl` — closed trades & total profit\n"
             "`/market` — is the market open?\n"

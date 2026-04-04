@@ -88,6 +88,18 @@ def _save_trades(trades: list) -> None:
     _kv_set("trades", trades)
 
 
+def delete_position(ticker: str) -> bool:
+    """Remove a position without recording a trade. Returns True if it existed."""
+    ticker    = ticker.upper()
+    positions = _load_positions()
+    if ticker not in positions:
+        return False
+    del positions[ticker]
+    _save_positions(positions)
+    log.info("Position deleted: %s", ticker)
+    return True
+
+
 def add_position(ticker: str, buy_price: float, quantity: float) -> None:
     ticker    = ticker.upper()
     positions = _load_positions()
