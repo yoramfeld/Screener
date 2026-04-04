@@ -30,6 +30,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 import requests
+import yfinance as yf
 from flask import Flask, abort, request
 
 import config
@@ -137,6 +138,19 @@ def webhook():
         positions = portfolio.enrich_positions()
         notifier.send_portfolio(positions)
 
+    elif cmd == "/market":
+        try:
+            state = yf.Ticker("SPY").fast_info.market_state
+            msgs = {
+                "REGULAR": "🟢 Market is *OPEN* (regular hours)",
+                "PRE":     "🌅 Market is in *PRE-MARKET*",
+                "POST":    "🌆 Market is in *AFTER-HOURS*",
+                "CLOSED":  "🔴 Market is *CLOSED*",
+            }
+            _send_message(msgs.get(state, f"Market state: {state}"))
+        except Exception as e:
+            _send_message(f"Could not fetch market state: {e}")
+
     elif cmd in ("/start", "/help", "/?"):
         _send_message(
             "📖 *Commands*\n"
@@ -146,6 +160,7 @@ def webhook():
             "`/sell AAPL 185.20 30` — partial sell (30 shares)\n"
             "`/portfolio` — open positions & stop levels\n"
             "`/pnl` — closed trades & total profit\n"
+            "`/market` — is the market open right now?\n"
             "`/help` or `/?` — show this list"
         )
 
