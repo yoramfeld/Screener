@@ -87,8 +87,12 @@ def add_position(ticker: str, buy_price: float, quantity: float) -> None:
     log.info("Position added: %s %g shares @ $%.2f", ticker, quantity, buy_price)
 
 
-def close_position(ticker: str, sell_price: float) -> Optional[Trade]:
-    """Record the sell, compute P&L, remove from positions. Returns the trade or None if not found."""
+def close_position(ticker: str, sell_price: float, quantity: Optional[float] = None) -> Optional[Trade]:
+    """
+    Record a sell. If quantity is None, sells all shares.
+    For partial sells, reduces the position and keeps the remainder open.
+    Returns the trade dict or None if position not found.
+    """
     ticker = ticker.upper()
     with _conn() as con:
         row = con.execute(
@@ -96,23 +100,31 @@ def close_position(ticker: str, sell_price: float) -> Optional[Trade]:
         ).fetchone()
         if not row:
             return None
-        buy_price, quantity, buy_date = row
+        buy_price, held_qty, buy_date = row
+        sell_qty   = quantity if quantity is not None else held_qty
+        sell_qty   = min(sell_qty, held_qty)  # can't sell more than held
         pct_pnl    = (sell_price - buy_price) / buy_price * 100
-        dollar_pnl = (sell_price - buy_price) * quantity
+        dollar_pnl = (sell_price - buy_price) * sell_qty
         sell_date  = date.today().isoformat()
         con.execute(
             "INSERT INTO trades (ticker, buy_price, quantity, buy_date, sell_price, sell_date, pct_pnl, dollar_pnl) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (ticker, buy_price, quantity, buy_date, sell_price, sell_date,
+            (ticker, buy_price, sell_qty, buy_date, sell_price, sell_date,
              round(pct_pnl, 2), round(dollar_pnl, 2)),
         )
-        con.execute("DELETE FROM positions WHERE ticker=?", (ticker,))
+        remaining = held_qty - sell_qty
+        if remaining > 0:
+            con.execute("UPDATE positions SET quantity=? WHERE ticker=?", (remaining, ticker))
+        else:
+            con.execute("DELETE FROM positions WHERE ticker=?", (ticker,))
         con.commit()
-    log.info("Position closed: %s @ $%.2f (%.2f%% / $%.2f)", ticker, sell_price, pct_pnl, dollar_pnl)
+    log.info("Sold %g %s @ $%.2f (%.2f%% / $%.2f), %g remaining",
+             sell_qty, ticker, sell_price, pct_pnl, dollar_pnl, remaining if remaining > 0 else 0)
     return {
         "ticker":     ticker,
         "buy_price":  buy_price,
-        "quantity":   quantity,
+        "quantity":   sell_qty,
+        "remaining":  remaining if remaining > 0 else 0,
         "buy_date":   buy_date,
         "sell_price": sell_price,
         "sell_date":  sell_date,

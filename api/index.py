@@ -104,22 +104,26 @@ def webhook():
                 _send_message("Invalid input. Usage: `/buy AAPL 182.40 50`")
 
     elif cmd == "/sell":
-        if len(parts) != 3:
-            _send_message("Usage: `/sell AAPL 185.20`")
+        if len(parts) < 3:
+            _send_message("Usage: `/sell AAPL 185.20` or `/sell AAPL 185.20 30` (partial)")
         else:
             try:
                 ticker     = parts[1].upper()
                 sell_price = float(parts[2])
-                trade = portfolio.close_position(ticker, sell_price)
+                quantity   = float(parts[3]) if len(parts) == 4 else None
+                trade = portfolio.close_position(ticker, sell_price, quantity)
                 if trade:
-                    emoji     = "🟢" if trade["pct_pnl"] >= 0 else "🔴"
-                    sign      = "+" if trade["pct_pnl"] >= 0 else ""
+                    emoji       = "🟢" if trade["pct_pnl"] >= 0 else "🔴"
+                    sign        = "+" if trade["pct_pnl"] >= 0 else ""
                     dollar_sign = "+" if trade["dollar_pnl"] >= 0 else ""
+                    remaining   = trade.get("remaining", 0)
+                    remain_line = f"\n  Remaining: {remaining:g} shares still open" if remaining > 0 else ""
                     _send_message(
-                        f"{emoji} *{ticker}* closed\n"
-                        f"  Buy: ${trade['buy_price']} × {trade['quantity']:g} shares ({trade['buy_date']})\n"
+                        f"{emoji} *{ticker}* — sold {trade['quantity']:g} shares\n"
+                        f"  Buy: ${trade['buy_price']} ({trade['buy_date']})\n"
                         f"  Sell: ${trade['sell_price']} ({trade['sell_date']})\n"
                         f"  P&L: {sign}{trade['pct_pnl']}% ({dollar_sign}${trade['dollar_pnl']:,.2f})"
+                        f"{remain_line}"
                     )
                 else:
                     _send_message(f"*{ticker}* not found in portfolio.")
@@ -138,7 +142,8 @@ def webhook():
             "Bot is active. Commands:\n"
             "`/run` — scan now\n"
             "`/buy AAPL 182.40 50` — record a buy (ticker, price, shares)\n"
-            "`/sell AAPL 185.20` — record a sell + P&L\n"
+            "`/sell AAPL 185.20` — sell all shares\n"
+            "`/sell AAPL 185.20 30` — partial sell (30 shares)\n"
             "`/portfolio` — open positions & stop levels\n"
             "`/pnl` — closed trades & total profit"
         )
