@@ -27,7 +27,7 @@ import config
 
 log = logging.getLogger(__name__)
 
-Signal = Dict  # {ticker, close, sma150, pct_from_sma, volume_ratio, earnings_flag}
+Signal = Dict  # {signal_type, ticker, close, ...}
 
 
 # ---------------------------------------------------------------------------
@@ -117,17 +117,21 @@ def screen(tickers: List[str]) -> List[Signal]:
     for ticker in tickers:
         try:
             df = _extract_ticker(raw, ticker, len(tickers))
-            if df is None or len(df) < 155:
-                # Need at least 150 bars for SMA + 5 for slope
+            if df is None or len(df) < 205:
+                # Need at least 200 bars for SMA200 + a prior bar to detect crosses
                 continue
 
-            sig = _evaluate(ticker, df)
-            if sig:
-                signals.append(sig)
+            bounce = _evaluate_bounce(ticker, df)
+            if bounce:
+                signals.append(bounce)
+
+            cross = _evaluate_cross(ticker, df)
+            if cross:
+                signals.append(cross)
         except Exception as exc:
             log.debug("Error processing %s: %s", ticker, exc)
 
-    signals.sort(key=lambda s: s["pct_from_sma"])
+    signals.sort(key=lambda s: s["signal_type"])
     log.info("Screen complete — %d signal(s) found", len(signals))
     return signals
 
@@ -145,7 +149,40 @@ def _extract_ticker(raw: pd.DataFrame, ticker: str, total: int) -> Optional[pd.D
         return None
 
 
-def _evaluate(ticker: str, df: pd.DataFrame) -> Optional[Signal]:
+def _evaluate_cross(ticker: str, df: pd.DataFrame) -> Optional[Signal]:
+    """Detect Golden Cross or Death Cross on the most recent bar."""
+    df = df.dropna(subset=["Close"])
+    df["sma50"] = df["Close"].rolling(50).mean()
+    df["sma200"] = df["Close"].rolling(200).mean()
+
+    if df["sma50"].isna().iloc[-1] or df["sma200"].isna().iloc[-1]:
+        return None
+
+    sma50_today = float(df["sma50"].iloc[-1])
+    sma200_today = float(df["sma200"].iloc[-1])
+    sma50_prev = float(df["sma50"].iloc[-2])
+    sma200_prev = float(df["sma200"].iloc[-2])
+    close = float(df["Close"].iloc[-1])
+
+    if sma50_prev <= sma200_prev and sma50_today > sma200_today:
+        signal_type = "golden_cross"
+    elif sma50_prev >= sma200_prev and sma50_today < sma200_today:
+        signal_type = "death_cross"
+    else:
+        return None
+
+    earnings_flag = _has_earnings_soon(ticker)
+    return {
+        "signal_type": signal_type,
+        "ticker": ticker,
+        "close": round(close, 2),
+        "sma50": round(sma50_today, 2),
+        "sma200": round(sma200_today, 2),
+        "earnings_flag": earnings_flag,
+    }
+
+
+def _evaluate_bounce(ticker: str, df: pd.DataFrame) -> Optional[Signal]:
     """Apply all filters to a single ticker's DataFrame. Return Signal or None."""
     df = df.dropna(subset=["Close", "Open", "Low", "Volume"])
 
@@ -184,6 +221,7 @@ def _evaluate(ticker: str, df: pd.DataFrame) -> Optional[Signal]:
     earnings_flag = _has_earnings_soon(ticker)
 
     return {
+        "signal_type": "bounce",
         "ticker": ticker,
         "close": round(close, 2),
         "sma150": round(sma_today, 2),

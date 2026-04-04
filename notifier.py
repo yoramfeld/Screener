@@ -31,13 +31,30 @@ def _tradingview_url(ticker: str) -> str:
 
 def _format_signal(sig: Signal) -> str:
     earnings_line = "  ⚠️ EARNINGS within 48h — HIGH RISK\n" if sig["earnings_flag"] else ""
+    chart = f"  [Chart]({_tradingview_url(sig['ticker'])})"
+
+    if sig["signal_type"] == "golden_cross":
+        return (
+            f"🟡 *{sig['ticker']}* — Golden Cross (BUY)\n"
+            f"  Price: ${sig['close']}  |  SMA50: ${sig['sma50']}  |  SMA200: ${sig['sma200']}\n"
+            f"{earnings_line}"
+            f"{chart}"
+        )
+    if sig["signal_type"] == "death_cross":
+        return (
+            f"💀 *{sig['ticker']}* — Death Cross (SELL)\n"
+            f"  Price: ${sig['close']}  |  SMA50: ${sig['sma50']}  |  SMA200: ${sig['sma200']}\n"
+            f"{earnings_line}"
+            f"{chart}"
+        )
+    # bounce
     return (
         f"📈 *{sig['ticker']}* — SMA150 Bounce\n"
         f"  Price: ${sig['close']}  |  SMA150: ${sig['sma150']}  "
         f"(+{sig['pct_from_sma']}%)\n"
         f"  Volume: {sig['volume_ratio']}% of avg\n"
         f"{earnings_line}"
-        f"  [Chart]({_tradingview_url(sig['ticker'])})"
+        f"{chart}"
     )
 
 
@@ -64,7 +81,7 @@ def _build_message(
         return (
             f"✅ *Swing Screener* — {now}\n"
             f"{screened_line}"
-            f"No SMA150 bounce setups found today."
+            f"No setups found today (bounce or cross)."
         )
 
     header = f"🔔 *Swing Screener* — {now}\n{screened_line}{len(signals)} setup(s) found:\n\n"
