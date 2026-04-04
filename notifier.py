@@ -101,6 +101,7 @@ def _build_message(
     aborted: bool = False,
     total_screened: int = 0,
     sample_tickers: List[str] = [],
+    debug: str = "",
 ) -> str:
     from datetime import datetime, timezone
     now = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
@@ -116,10 +117,12 @@ def _build_message(
         )
 
     if not signals:
+        debug_line = f"\n_{debug}_" if debug else ""
         return (
             f"✅ *Swing Screener* — {now}\n"
             f"{screened_line}"
             f"No setups found (bounce, cross or RSI)."
+            f"{debug_line}"
         )
 
     header = f"🔔 *Swing Screener* — {now}\n{screened_line}{len(signals)} setup(s) found:\n\n"
@@ -127,6 +130,6 @@ def _build_message(
     return header + body
 
 
-def send_summary(signals: List[Signal], aborted: bool = False, total_screened: int = 0, sample_tickers: List[str] = []) -> None:
+def send_summary(signals: List[Signal], aborted: bool = False, total_screened: int = 0, sample_tickers: List[str] = [], debug: str = "") -> None:
     """Send the end-of-run summary (abort notice or 'no signals found')."""
-    _post(_build_message(signals, aborted=aborted, total_screened=total_screened, sample_tickers=sample_tickers))
+    _post(_build_message(signals, aborted=aborted, total_screened=total_screened, sample_tickers=sample_tickers, debug=debug))

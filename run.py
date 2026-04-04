@@ -65,7 +65,8 @@ def main() -> None:
 
     # 4. End summary — only needed when nothing was found
     if signals_sent == 0:
-        notifier.send_summary([], total_screened=len(tickers), sample_tickers=tickers[:3])
+        debug = screener.sample_debug(tickers[0] if tickers else "AAPL")
+        notifier.send_summary([], total_screened=len(tickers), sample_tickers=tickers[:3], debug=debug)
 
     log.info("Done — %d signal(s) sent", signals_sent)
 

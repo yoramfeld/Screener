@@ -192,6 +192,40 @@ def _evaluate_cross(ticker: str, df: pd.DataFrame) -> Optional[Signal]:
     return None
 
 
+def sample_debug(ticker: str = "AAPL") -> str:
+    """Return a one-liner of raw metrics for a single ticker — used in the no-signals message."""
+    try:
+        df = yf.download(ticker, period="200d", interval="1d", auto_adjust=True, progress=False)
+        df = df.dropna(subset=["Close"])
+        if len(df) < 205:
+            return f"{ticker}: not enough data"
+
+        close = float(df["Close"].iloc[-1])
+        low   = float(df["Low"].iloc[-1])
+
+        df["sma150"] = df["Close"].rolling(150).mean()
+        df["sma50"]  = df["Close"].rolling(50).mean()
+        df["sma200"] = df["Close"].rolling(200).mean()
+
+        sma150  = float(df["sma150"].iloc[-1])
+        sma5ago = float(df["sma150"].iloc[-6])
+        sma50   = float(df["sma50"].iloc[-1])
+        sma200  = float(df["sma200"].iloc[-1])
+        rsi     = round(_calc_rsi(df["Close"], config.RSI_PERIOD), 1)
+        slope   = "↑" if sma150 > sma5ago else "↓"
+
+        avg_vol    = float(df["Volume"].iloc[-21:-1].mean())
+        vol_ratio  = round(df["Volume"].iloc[-1] / avg_vol * 100, 0) if avg_vol > 0 else 0
+
+        return (
+            f"Sample ({ticker}): Close=${close:.2f} Low=${low:.2f} "
+            f"SMA150=${sma150:.2f}{slope} SMA50=${sma50:.2f} SMA200=${sma200:.2f} "
+            f"RSI={rsi} Vol={vol_ratio:.0f}%"
+        )
+    except Exception as exc:
+        return f"Debug fetch failed: {exc}"
+
+
 def _calc_rsi(close: pd.Series, period: int) -> float:
     """Wilder's RSI using exponential smoothing (alpha = 1/period)."""
     delta = close.diff()
