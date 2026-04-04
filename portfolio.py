@@ -188,7 +188,7 @@ def enrich_positions() -> List[Position]:
     try:
         raw = yf.download(
             tickers,
-            period="200d",
+            period="1y",
             interval="1d",
             auto_adjust=True,
             progress=False,
