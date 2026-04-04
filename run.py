@@ -8,6 +8,7 @@ Exits with code 0 on success (including "no signals"), code 1 on error.
 """
 
 import logging
+import os
 import sys
 from datetime import datetime, timezone
 
@@ -34,8 +35,9 @@ def _within_trading_hours() -> bool:
 
 
 def main() -> None:
-    # 0. Trading hours gate — silent exit outside market hours
-    if not _within_trading_hours():
+    # 0. Trading hours gate — skip for manual workflow_dispatch triggers
+    is_manual = os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch"
+    if not is_manual and not _within_trading_hours():
         log.info("Outside trading hours — exiting")
         return
 
