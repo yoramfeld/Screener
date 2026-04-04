@@ -61,7 +61,7 @@ def _format_signal(sig: Signal) -> str:
     # bounce
     return (
         f"📈 *{sig['ticker']}* — SMA150 Bounce\n"
-        f"  Price: ${sig['close']}  |  SMA150: ${sig['sma150']}  "
+        f"  Price: ${sig['close']}  |  SMA150: ${sig['sma150']}↑  "
         f"(+{sig['pct_from_sma']}%)\n"
         f"  Volume: {sig['volume_ratio']}% of avg\n"
         f"{earnings_line}"
@@ -183,10 +183,11 @@ def send_portfolio(positions: List[Position]) -> None:
         stop_pnl   = (p["stop"] - p["buy_price"]) / p["buy_price"] * 100
         stop_sign  = "+" if stop_pnl >= 0 else ""
         warning    = "  ⚠️ STOP HIT" if p["stop_hit"] else ""
+        sma_arrow = "↑" if p.get("sma150_rising") else "↓"
         lines.append(
             f"{arrow} *{p['ticker']}* — entry ${p['buy_price']}  ({p['buy_date']})\n"
             f"  Now: ${p['current']} ({sign}{p['pct_change']}%)  "
-            f"|  SMA150: ${p['sma150']}  "
+            f"|  SMA150: ${p['sma150']}{sma_arrow}  "
             f"|  Stop: ${p['stop']} ({stop_sign}{stop_pnl:.1f}%){warning}"
         )
 
@@ -207,7 +208,7 @@ def send_above(matches: list) -> None:
         sign  = "+" if m["pct_from_sma"] >= 0 else ""
         chart = f"[Chart]({_tradingview_url(m['ticker'])})"
         lines.append(
-            f"📶 *{m['ticker']}* — ${m['close']}  |  SMA150: ${m['sma150']} ({sign}{m['pct_from_sma']}%)  {chart}"
+            f"📶 *{m['ticker']}* — ${m['close']}  |  SMA150: ${m['sma150']}↑ ({sign}{m['pct_from_sma']}%)  {chart}"
         )
 
     header = f"📶 *Above SMA150* — {now}\n_{len(matches)} stocks, sorted by proximity_\n\n"

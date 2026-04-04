@@ -128,16 +128,18 @@ def _check_stock(ticker: str) -> str:
         if len(df) < 150:
             return f"❌ Not enough data for *{ticker}*"
         df["sma150"] = df["Close"].rolling(150).mean()
-        close  = round(float(df["Close"].iloc[-1]), 2)
-        sma150 = round(float(df["sma150"].iloc[-1]), 2)
-        pct    = round((close - sma150) / sma150 * 100, 2)
-        sign   = "+" if pct >= 0 else ""
-        arrow  = "📈" if close > sma150 else "📉"
-        status = "above" if close > sma150 else "below"
+        close      = round(float(df["Close"].iloc[-1]), 2)
+        sma150     = round(float(df["sma150"].iloc[-1]), 2)
+        sma_5ago   = float(df["sma150"].iloc[-6])
+        sma_arrow  = "↑" if sma150 > sma_5ago else "↓"
+        pct        = round((close - sma150) / sma150 * 100, 2)
+        sign       = "+" if pct >= 0 else ""
+        arrow      = "📈" if close > sma150 else "📉"
+        status     = "above" if close > sma150 else "below"
         return (
             f"{arrow} *{ticker}*\n"
             f"  Price: ${close}\n"
-            f"  SMA150: ${sma150}\n"
+            f"  SMA150: ${sma150}{sma_arrow}\n"
             f"  {sign}{pct}% {status} SMA150"
         )
     except Exception as exc:

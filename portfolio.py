@@ -218,18 +218,20 @@ def enrich_positions() -> List[Position]:
             df["sma150"] = df["Close"].rolling(150).mean()
             current    = float(df["Close"].iloc[-1])
             sma150     = float(df["sma150"].iloc[-1])
+            sma_5ago   = float(df["sma150"].iloc[-6])
             stop       = sma150 * (1 - STOP_BELOW_SMA)
             pct_chg    = (current - pos["buy_price"]) / pos["buy_price"] * 100
             dollar_chg = (current - pos["buy_price"]) * pos["quantity"]
 
             enriched.append({
                 **pos,
-                "current":       round(current, 2),
-                "pct_change":    round(pct_chg, 2),
-                "dollar_change": round(dollar_chg, 2),
-                "sma150":        round(sma150, 2),
-                "stop":          round(stop, 2),
-                "stop_hit":      current < stop,
+                "current":        round(current, 2),
+                "pct_change":     round(pct_chg, 2),
+                "dollar_change":  round(dollar_chg, 2),
+                "sma150":         round(sma150, 2),
+                "sma150_rising":  sma150 > sma_5ago,
+                "stop":           round(stop, 2),
+                "stop_hit":       current < stop,
             })
         except Exception as exc:
             log.warning("Could not enrich %s: %s", pos["ticker"], exc)
