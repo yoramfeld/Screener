@@ -50,13 +50,13 @@ def main() -> None:
     # 2. Fetch universe (~600 tickers)
     tickers = universe.get_universe()
 
-    # 3. Stream signals — send each match immediately as it's found
+    # 3. Send started message immediately — before the slow batch download
+    notifier.send_started(tickers[0], tickers[1] if len(tickers) > 1 else "", len(tickers))
+
+    # 4. Stream signals — send each match immediately as it's found
     signals_sent = 0
 
-    def on_first_evaluated(first: str, next_t: str) -> None:
-        notifier.send_started(first, next_t, len(tickers))
-
-    for signal in screener.stream_signals(tickers, on_first_evaluated=on_first_evaluated):
+    for signal in screener.stream_signals(tickers):
         if database.was_alerted(signal["ticker"], signal["signal_type"]):
             continue
         database.mark_alerted(signal["ticker"], signal["signal_type"])

@@ -18,7 +18,7 @@ Returns a list of Signal dicts — one per qualifying ticker.
 
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Callable, Dict, Generator, List, Optional
+from typing import Dict, Generator, List, Optional
 
 import pandas as pd
 import yfinance as yf
@@ -93,10 +93,7 @@ def _has_earnings_soon(ticker: str) -> bool:
 # Main scanner
 # ---------------------------------------------------------------------------
 
-def stream_signals(
-    tickers: List[str],
-    on_first_evaluated: Optional[Callable[[str, str], None]] = None,
-) -> Generator[Signal, None, None]:
+def stream_signals(tickers: List[str]) -> Generator[Signal, None, None]:
     """
     Download OHLCV for all tickers in one batch call, then yield signals as
     they are found — one at a time — so callers can act on each immediately.
@@ -118,14 +115,9 @@ def stream_signals(
         threads=True,
     )
 
-    for i, ticker in enumerate(tickers):
+    for ticker in tickers:
         try:
             df = _extract_ticker(raw, ticker, len(tickers))
-
-            # Fire the "started" callback after the first ticker is evaluated
-            if i == 0 and on_first_evaluated:
-                next_ticker = tickers[1] if len(tickers) > 1 else ""
-                on_first_evaluated(ticker, next_ticker)
 
             if df is None or len(df) < 205:
                 continue
