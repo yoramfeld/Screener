@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       run_type:
-        description: 'screen | portfolio | pnl'
+        description: 'screen | portfolio | pnl | above'
         default: screen
 
 jobs:

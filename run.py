@@ -73,6 +73,12 @@ def run_portfolio() -> None:
     notifier.send_portfolio(positions)
 
 
+def run_above() -> None:
+    tickers = universe.get_universe()
+    matches = screener.scan_above(tickers)
+    notifier.send_above(matches)
+
+
 def run_pnl() -> None:
     trades = portfolio.get_trades()
     notifier.send_pnl(trades)
@@ -80,7 +86,7 @@ def run_pnl() -> None:
 
 if __name__ == "__main__":
     run_type = os.environ.get("RUN_TYPE", "screen")
-    dispatch = {"screen": run_screen, "portfolio": run_portfolio, "pnl": run_pnl}
+    dispatch = {"screen": run_screen, "portfolio": run_portfolio, "pnl": run_pnl, "above": run_above}
     fn = dispatch.get(run_type, run_screen)
     try:
         fn()

@@ -191,3 +191,24 @@ def send_portfolio(positions: List[Position]) -> None:
         )
 
     _post("📋 *Portfolio — Stop Levels*\n\n" + "\n\n".join(lines))
+
+
+def send_above(matches: list) -> None:
+    """Send stocks trading above their rising SMA150, sorted closest-first."""
+    from datetime import datetime, timezone
+    now = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+    if not matches:
+        _post(f"📶 *Above SMA150* — {now}\nNo stocks found above a rising SMA150.")
+        return
+
+    lines = []
+    for m in matches:
+        sign  = "+" if m["pct_from_sma"] >= 0 else ""
+        chart = f"[Chart]({_tradingview_url(m['ticker'])})"
+        lines.append(
+            f"📶 *{m['ticker']}* — ${m['close']}  |  SMA150: ${m['sma150']} ({sign}{m['pct_from_sma']}%)  {chart}"
+        )
+
+    header = f"📶 *Above SMA150* — {now}\n_{len(matches)} stocks, sorted by proximity_\n\n"
+    _post(header + "\n".join(lines))

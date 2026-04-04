@@ -212,6 +212,12 @@ def webhook():
             else:
                 _send_message(f"❌ *{ticker}* not found in your portfolio.")
 
+    elif cmd == "/above":
+        if _trigger("above"):
+            _send_message("📶 Scanning for stocks above SMA150... one moment.")
+        else:
+            _send_message("Failed to trigger. Check GITHUB_PAT in Vercel env vars.")
+
     elif cmd == "/sma":
         if _trigger("portfolio"):
             _send_message("📊 Fetching live prices & SMA150 stops... one moment.")
@@ -270,6 +276,7 @@ def webhook():
         _send_message(
             "📖 *Commands*\n"
             "`/scan` — scan all stocks now\n"
+            "`/above` — top 20 stocks above a rising SMA150 (~1 min)\n"
             "`/buy AAPL 182.40 50` — record a buy\n"
             "`/sell AAPL 185.20` — sell all shares\n"
             "`/sell AAPL 185.20 30` — partial sell\n"

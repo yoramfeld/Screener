@@ -192,6 +192,62 @@ def _evaluate_cross(ticker: str, df: pd.DataFrame) -> Optional[Signal]:
     return None
 
 
+def scan_above(tickers: List[str], top_n: int = 20) -> List[Signal]:
+    """
+    Return up to top_n stocks where Close > SMA150 and SMA150 is rising,
+    sorted by % above SMA150 ascending (closest to the line first).
+    """
+    if not tickers:
+        return []
+
+    log.info("Downloading data for %d tickers (above scan)...", len(tickers))
+    raw = yf.download(
+        tickers,
+        period="1y",
+        interval="1d",
+        auto_adjust=True,
+        progress=False,
+        group_by="ticker",
+        threads=True,
+    )
+
+    results = []
+    for ticker in tickers:
+        try:
+            df = _extract_ticker(raw, ticker, len(tickers))
+            if df is None or len(df) < 155:
+                continue
+
+            df = df.dropna(subset=["Close"])
+            df["sma150"] = df["Close"].rolling(150).mean()
+            if df["sma150"].isna().iloc[-1]:
+                continue
+
+            sma_today = float(df["sma150"].iloc[-1])
+            sma_5ago  = float(df["sma150"].iloc[-6])
+            close     = float(df["Close"].iloc[-1])
+
+            if sma_today <= sma_5ago:       # SMA must be rising
+                continue
+            if close <= sma_today:          # Close must be above SMA150
+                continue
+
+            pct_from_sma = (close - sma_today) / sma_today * 100
+            results.append({
+                "signal_type": "above",
+                "ticker":       ticker,
+                "close":        round(close, 2),
+                "sma150":       round(sma_today, 2),
+                "pct_from_sma": round(pct_from_sma, 2),
+                "earnings_flag": False,
+            })
+        except Exception as exc:
+            log.debug("Error processing %s: %s", ticker, exc)
+
+    results.sort(key=lambda x: x["pct_from_sma"])
+    return results[:top_n]
+
+
 def sample_debug(ticker: str = "AAPL") -> str:
     """Return a one-liner of raw metrics for a single ticker — used in the no-signals message."""
     try:
