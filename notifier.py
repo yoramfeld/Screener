@@ -13,6 +13,7 @@ import requests
 
 import config
 from screener import Signal
+from portfolio import Position
 
 log = logging.getLogger(__name__)
 
@@ -133,3 +134,23 @@ def _build_message(
 def send_summary(signals: List[Signal], aborted: bool = False, total_screened: int = 0, sample_tickers: List[str] = [], debug: str = "") -> None:
     """Send the end-of-run summary (abort notice or 'no signals found')."""
     _post(_build_message(signals, aborted=aborted, total_screened=total_screened, sample_tickers=sample_tickers, debug=debug))
+
+
+def send_portfolio(positions: List[Position]) -> None:
+    """Send current stop levels for all open positions."""
+    if not positions:
+        _post("📋 *Portfolio* — no open positions.")
+        return
+
+    lines = []
+    for p in positions:
+        arrow   = "🟢" if p["pct_change"] >= 0 else "🔴"
+        sign    = "+" if p["pct_change"] >= 0 else ""
+        warning = "  ⚠️ STOP HIT" if p["stop_hit"] else ""
+        lines.append(
+            f"{arrow} *{p['ticker']}* — entry ${p['buy_price']}  ({p['buy_date']})\n"
+            f"  Now: ${p['current']} ({sign}{p['pct_change']}%)  "
+            f"|  SMA150: ${p['sma150']}  |  Stop: ${p['stop']}{warning}"
+        )
+
+    _post("📋 *Portfolio — Stop Levels*\n\n" + "\n\n".join(lines))

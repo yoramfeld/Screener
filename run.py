@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 
 import database
 import notifier
+import portfolio
 import screener
 import universe
 
@@ -66,6 +67,11 @@ def main() -> None:
         notifier.send_summary([], total_screened=len(tickers), sample_tickers=tickers[:3], debug=debug)
 
     log.info("Done — %d signal(s) sent", signals_sent)
+
+    # 5. Portfolio stop update — send if any positions are open
+    positions = portfolio.enrich_positions()
+    if positions:
+        notifier.send_portfolio(positions)
 
 
 if __name__ == "__main__":
