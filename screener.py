@@ -212,11 +212,13 @@ def scan_above(tickers: List[str], top_n: int = 20) -> List[Signal]:
     )
 
     results = []
+    n_extracted = n_rising = n_above = 0
     for ticker in tickers:
         try:
             df = _extract_ticker(raw, ticker, len(tickers))
             if df is None or len(df) < 155:
                 continue
+            n_extracted += 1
 
             df = df.dropna(subset=["Close"])
             df["sma150"] = df["Close"].rolling(150).mean()
@@ -227,10 +229,13 @@ def scan_above(tickers: List[str], top_n: int = 20) -> List[Signal]:
             sma_5ago  = float(df["sma150"].iloc[-6])
             close     = float(df["Close"].iloc[-1])
 
-            if sma_today <= sma_5ago:       # SMA must be rising
+            if sma_today <= sma_5ago:
                 continue
-            if close <= sma_today:          # Close must be above SMA150
+            n_rising += 1
+
+            if close <= sma_today:
                 continue
+            n_above += 1
 
             pct_from_sma = (close - sma_today) / sma_today * 100
             results.append({
@@ -242,8 +247,10 @@ def scan_above(tickers: List[str], top_n: int = 20) -> List[Signal]:
                 "earnings_flag": False,
             })
         except Exception as exc:
-            log.debug("Error processing %s: %s", ticker, exc)
+            log.warning("Above scan error %s: %s", ticker, exc)
 
+    log.info("Above scan: %d extracted, %d rising SMA, %d above SMA → %d results",
+             n_extracted, n_rising, n_above, len(results))
     results.sort(key=lambda x: x["pct_from_sma"])
     return results[:top_n]
 
