@@ -85,8 +85,15 @@ def webhook():
     if secret and request.headers.get("X-Telegram-Bot-Api-Secret-Token") != secret:
         abort(403)
 
-    body  = request.get_json(silent=True) or {}
-    text  = body.get("message", {}).get("text", "").strip()
+    body    = request.get_json(silent=True) or {}
+    message = body.get("message", {})
+    chat_id = str(message.get("chat", {}).get("id", ""))
+
+    # Reject anyone who isn't the authorized user — silent drop, no reply
+    if chat_id != config.TELEGRAM_CHAT_ID:
+        return "OK", 200
+
+    text  = message.get("text", "").strip()
     parts = text.split()
     cmd   = parts[0].lower() if parts else ""
 
