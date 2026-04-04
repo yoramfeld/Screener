@@ -1,89 +1,102 @@
 """
 Portfolio tracker — stores open positions and computes trailing stop levels.
 
-Positions table:
-  ticker    — stock symbol
-  buy_price — entry price
-  quantity  — number of shares
-  buy_date  — date of entry (YYYY-MM-DD)
+Data is stored in Upstash Redis (Vercel KV) via the REST API so it persists
+across Vercel function invocations and GitHub Actions runs.
+
+Keys:
+  positions  — JSON dict  {ticker: {buy_price, quantity, buy_date}}
+  trades     — JSON list  [{ticker, buy_price, quantity, buy_date,
+                            sell_price, sell_date, pct_pnl, dollar_pnl}]
+              (newest first)
 
 Stop level = SMA150 * (1 - STOP_BELOW_SMA) — trails upward as SMA150 rises.
-Total P&L uses dollar-weighted return: sum(dollar_pnl) / sum(cost_basis).
 """
 
+import json
 import logging
-import sqlite3
-from contextlib import contextmanager
+import os
 from datetime import date
 from typing import Dict, List, Optional
 
 import pandas as pd
+import requests
 import yfinance as yf
-
-import config
 
 log = logging.getLogger(__name__)
 
 STOP_BELOW_SMA = 0.02  # stop placed 2% below SMA150
 
-_CREATE_POSITIONS = """
-CREATE TABLE IF NOT EXISTS positions (
-    ticker     TEXT PRIMARY KEY,
-    buy_price  REAL NOT NULL,
-    quantity   REAL NOT NULL DEFAULT 0,
-    buy_date   TEXT NOT NULL
-);
-"""
-
-_CREATE_TRADES = """
-CREATE TABLE IF NOT EXISTS trades (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    ticker      TEXT    NOT NULL,
-    buy_price   REAL    NOT NULL,
-    quantity    REAL    NOT NULL DEFAULT 0,
-    buy_date    TEXT    NOT NULL,
-    sell_price  REAL    NOT NULL,
-    sell_date   TEXT    NOT NULL,
-    pct_pnl     REAL    NOT NULL,
-    dollar_pnl  REAL    NOT NULL DEFAULT 0
-);
-"""
-
 Position = Dict  # {ticker, buy_price, quantity, buy_date, current, pct_change, sma150, stop}
 Trade    = Dict  # {ticker, buy_price, quantity, buy_date, sell_price, sell_date, pct_pnl, dollar_pnl}
 
 
-@contextmanager
-def _conn():
-    con = sqlite3.connect(config.DB_PATH)
+# ---------------------------------------------------------------------------
+# KV helpers
+# ---------------------------------------------------------------------------
+
+def _kv_get(key: str):
+    """Return parsed JSON value for key, or None if key is missing."""
+    url   = os.environ.get("KV_REST_API_URL", "")
+    token = os.environ.get("KV_REST_API_TOKEN", "")
+    if not url or not token:
+        log.error("KV credentials not set (KV_REST_API_URL / KV_REST_API_TOKEN)")
+        return None
     try:
-        con.execute(_CREATE_POSITIONS)
-        con.execute(_CREATE_TRADES)
-        # Migrate existing tables that predate quantity column
-        for table in ("positions", "trades"):
-            cols = [r[1] for r in con.execute(f"PRAGMA table_info({table})").fetchall()]
-            if "quantity" not in cols:
-                con.execute(f"ALTER TABLE {table} ADD COLUMN quantity REAL NOT NULL DEFAULT 0")
-        if "dollar_pnl" not in [r[1] for r in con.execute("PRAGMA table_info(trades)").fetchall()]:
-            con.execute("ALTER TABLE trades ADD COLUMN dollar_pnl REAL NOT NULL DEFAULT 0")
-        con.commit()
-        yield con
-    finally:
-        con.close()
+        resp   = requests.post(url, headers={"Authorization": f"Bearer {token}"},
+                               json=["GET", key], timeout=5)
+        result = resp.json().get("result")
+        return json.loads(result) if result is not None else None
+    except Exception as exc:
+        log.error("KV GET %s failed: %s", key, exc)
+        return None
+
+
+def _kv_set(key: str, value) -> None:
+    """Serialize value to JSON and store at key."""
+    url   = os.environ.get("KV_REST_API_URL", "")
+    token = os.environ.get("KV_REST_API_TOKEN", "")
+    if not url or not token:
+        log.error("KV credentials not set")
+        return
+    try:
+        requests.post(url, headers={"Authorization": f"Bearer {token}"},
+                      json=["SET", key, json.dumps(value)], timeout=5)
+    except Exception as exc:
+        log.error("KV SET %s failed: %s", key, exc)
 
 
 # ---------------------------------------------------------------------------
 # CRUD
 # ---------------------------------------------------------------------------
 
+def _load_positions() -> dict:
+    """Return {ticker: {buy_price, quantity, buy_date}} from KV."""
+    return _kv_get("positions") or {}
+
+
+def _save_positions(positions: dict) -> None:
+    _kv_set("positions", positions)
+
+
+def _load_trades() -> list:
+    """Return list of trade dicts from KV (newest first)."""
+    return _kv_get("trades") or []
+
+
+def _save_trades(trades: list) -> None:
+    _kv_set("trades", trades)
+
+
 def add_position(ticker: str, buy_price: float, quantity: float) -> None:
-    ticker = ticker.upper()
-    with _conn() as con:
-        con.execute(
-            "INSERT OR REPLACE INTO positions (ticker, buy_price, quantity, buy_date) VALUES (?, ?, ?, ?)",
-            (ticker, buy_price, quantity, date.today().isoformat()),
-        )
-        con.commit()
+    ticker    = ticker.upper()
+    positions = _load_positions()
+    positions[ticker] = {
+        "buy_price": buy_price,
+        "quantity":  quantity,
+        "buy_date":  date.today().isoformat(),
+    }
+    _save_positions(positions)
     log.info("Position added: %s %g shares @ $%.2f", ticker, quantity, buy_price)
 
 
@@ -93,65 +106,60 @@ def close_position(ticker: str, sell_price: float, quantity: Optional[float] = N
     For partial sells, reduces the position and keeps the remainder open.
     Returns the trade dict or None if position not found.
     """
-    ticker = ticker.upper()
-    with _conn() as con:
-        row = con.execute(
-            "SELECT buy_price, quantity, buy_date FROM positions WHERE ticker=?", (ticker,)
-        ).fetchone()
-        if not row:
-            return None
-        buy_price, held_qty, buy_date = row
-        sell_qty   = quantity if quantity is not None else held_qty
-        sell_qty   = min(sell_qty, held_qty)  # can't sell more than held
-        pct_pnl    = (sell_price - buy_price) / buy_price * 100
-        dollar_pnl = (sell_price - buy_price) * sell_qty
-        sell_date  = date.today().isoformat()
-        con.execute(
-            "INSERT INTO trades (ticker, buy_price, quantity, buy_date, sell_price, sell_date, pct_pnl, dollar_pnl) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (ticker, buy_price, sell_qty, buy_date, sell_price, sell_date,
-             round(pct_pnl, 2), round(dollar_pnl, 2)),
-        )
-        remaining = held_qty - sell_qty
-        if remaining > 0:
-            con.execute("UPDATE positions SET quantity=? WHERE ticker=?", (remaining, ticker))
-        else:
-            con.execute("DELETE FROM positions WHERE ticker=?", (ticker,))
-        con.commit()
-    log.info("Sold %g %s @ $%.2f (%.2f%% / $%.2f), %g remaining",
-             sell_qty, ticker, sell_price, pct_pnl, dollar_pnl, remaining if remaining > 0 else 0)
-    return {
+    ticker    = ticker.upper()
+    positions = _load_positions()
+    if ticker not in positions:
+        return None
+
+    pos       = positions[ticker]
+    buy_price = pos["buy_price"]
+    held_qty  = pos["quantity"]
+    buy_date  = pos["buy_date"]
+
+    sell_qty   = quantity if quantity is not None else held_qty
+    sell_qty   = min(sell_qty, held_qty)
+    pct_pnl    = (sell_price - buy_price) / buy_price * 100
+    dollar_pnl = (sell_price - buy_price) * sell_qty
+    sell_date  = date.today().isoformat()
+    remaining  = held_qty - sell_qty
+
+    trade = {
         "ticker":     ticker,
         "buy_price":  buy_price,
         "quantity":   sell_qty,
-        "remaining":  remaining if remaining > 0 else 0,
         "buy_date":   buy_date,
         "sell_price": sell_price,
         "sell_date":  sell_date,
         "pct_pnl":    round(pct_pnl, 2),
         "dollar_pnl": round(dollar_pnl, 2),
+        "remaining":  remaining if remaining > 0 else 0,
     }
+
+    trades = _load_trades()
+    trades.insert(0, {k: v for k, v in trade.items() if k != "remaining"})
+    _save_trades(trades)
+
+    if remaining > 0:
+        positions[ticker]["quantity"] = remaining
+    else:
+        del positions[ticker]
+    _save_positions(positions)
+
+    log.info("Sold %g %s @ $%.2f (%.2f%% / $%.2f), %g remaining",
+             sell_qty, ticker, sell_price, pct_pnl, dollar_pnl, remaining)
+    return trade
 
 
 def get_trades() -> List[Trade]:
-    with _conn() as con:
-        rows = con.execute(
-            "SELECT ticker, buy_price, quantity, buy_date, sell_price, sell_date, pct_pnl, dollar_pnl "
-            "FROM trades ORDER BY sell_date DESC"
-        ).fetchall()
-    return [
-        {"ticker": r[0], "buy_price": r[1], "quantity": r[2], "buy_date": r[3],
-         "sell_price": r[4], "sell_date": r[5], "pct_pnl": r[6], "dollar_pnl": r[7]}
-        for r in rows
-    ]
+    return _load_trades()
 
 
 def get_positions() -> List[dict]:
-    with _conn() as con:
-        rows = con.execute(
-            "SELECT ticker, buy_price, quantity, buy_date FROM positions ORDER BY buy_date"
-        ).fetchall()
-    return [{"ticker": r[0], "buy_price": r[1], "quantity": r[2], "buy_date": r[3]} for r in rows]
+    positions = _load_positions()
+    return [
+        {"ticker": ticker, **data}
+        for ticker, data in sorted(positions.items(), key=lambda x: x[1]["buy_date"])
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -203,12 +211,12 @@ def enrich_positions() -> List[Position]:
 
             enriched.append({
                 **pos,
-                "current":     round(current, 2),
-                "pct_change":  round(pct_chg, 2),
+                "current":       round(current, 2),
+                "pct_change":    round(pct_chg, 2),
                 "dollar_change": round(dollar_chg, 2),
-                "sma150":      round(sma150, 2),
-                "stop":        round(stop, 2),
-                "stop_hit":    current < stop,
+                "sma150":        round(sma150, 2),
+                "stop":          round(stop, 2),
+                "stop_hit":      current < stop,
             })
         except Exception as exc:
             log.warning("Could not enrich %s: %s", pos["ticker"], exc)
