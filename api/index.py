@@ -212,6 +212,12 @@ def webhook():
             else:
                 _send_message(f"❌ *{ticker}* not found in your portfolio.")
 
+    elif cmd == "/sma":
+        if _trigger("portfolio"):
+            _send_message("📊 Fetching live prices & SMA150 stops... one moment.")
+        else:
+            _send_message("Failed to trigger. Check GITHUB_PAT in Vercel env vars.")
+
     elif cmd == "/portfolio":
         import portfolio
         positions = portfolio.get_positions()
@@ -268,7 +274,8 @@ def webhook():
             "`/sell AAPL 185.20` — sell all shares\n"
             "`/sell AAPL 185.20 30` — partial sell\n"
             "`/delete AAPL` — remove a position without recording a trade\n"
-            "`/portfolio` — open positions & stop levels\n"
+            "`/portfolio` — open positions & cost basis\n"
+            "`/sma` — live price, SMA150 & stop levels (~30s)\n"
             "`/pnl` — closed trades & total profit\n"
             "`/market` — is the market open?\n"
             "`/help` or `/?` — show this list"
