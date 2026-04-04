@@ -169,7 +169,7 @@ def webhook():
             portfolio.add_position(ticker, price, quantity)
             _send_message(
                 f"✅ Recorded: *{ticker}* {quantity:g} shares @ ${price:.2f} "
-                f"(cost ${price * quantity:,.2f})\nStop tracked with each screener run."
+                f"(cost ${price * quantity:,.2f})\nUse /sma for live price & stop level."
             )
 
     elif cmd == "/sell":
