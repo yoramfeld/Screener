@@ -117,6 +117,33 @@ def _trigger(run_type: str = "screen") -> bool:
     return resp.status_code == 204
 
 
+def _check_stock(ticker: str) -> str:
+    import yfinance as yf
+    import pandas as pd
+    try:
+        df = yf.download(ticker, period="1y", interval="1d", auto_adjust=True, progress=False)
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+        df = df.dropna(subset=["Close"])
+        if len(df) < 150:
+            return f"❌ Not enough data for *{ticker}*"
+        df["sma150"] = df["Close"].rolling(150).mean()
+        close  = round(float(df["Close"].iloc[-1]), 2)
+        sma150 = round(float(df["sma150"].iloc[-1]), 2)
+        pct    = round((close - sma150) / sma150 * 100, 2)
+        sign   = "+" if pct >= 0 else ""
+        arrow  = "📈" if close > sma150 else "📉"
+        status = "above" if close > sma150 else "below"
+        return (
+            f"{arrow} *{ticker}*\n"
+            f"  Price: ${close}\n"
+            f"  SMA150: ${sma150}\n"
+            f"  {sign}{pct}% {status} SMA150"
+        )
+    except Exception as exc:
+        return f"❌ Could not fetch *{ticker}*: {exc}"
+
+
 def _market_status() -> str:
     from datetime import datetime, time
     now = datetime.now(tz=_ET)
@@ -212,6 +239,14 @@ def webhook():
             else:
                 _send_message(f"❌ *{ticker}* not found in your portfolio.")
 
+    elif cmd == "/check":
+        if len(parts) < 2:
+            _send_message("Usage: `/check AAPL`")
+        elif not re.fullmatch(r"[A-Za-z]{1,5}", parts[1]):
+            _send_message(f"❌ `{parts[1]}` doesn't look like a valid ticker")
+        else:
+            _send_message(_check_stock(parts[1].upper()))
+
     elif cmd == "/above":
         if _trigger("above"):
             _send_message("📶 Scanning for stocks above SMA150... one moment.")
@@ -277,6 +312,7 @@ def webhook():
             "📖 *Commands*\n"
             "`/scan` — scan all stocks now\n"
             "`/above` — top 20 stocks above a rising SMA150 (~1 min)\n"
+            "`/check AAPL` — price & SMA150 for a specific stock\n"
             "`/buy AAPL 182.40 50` — record a buy\n"
             "`/sell AAPL 185.20` — sell all shares\n"
             "`/sell AAPL 185.20 30` — partial sell\n"
