@@ -144,10 +144,13 @@ def _extract_ticker(raw: pd.DataFrame, ticker: str, total: int) -> Optional[pd.D
     """Extract a single-ticker OHLCV DataFrame from a potentially multi-ticker download."""
     try:
         if total == 1:
-            # Single ticker — raw IS the df
             return raw.copy()
-        # Multi-ticker — raw has a MultiIndex on columns: (field, ticker)
-        df = raw.xs(ticker, axis=1, level=1).copy()
+        if not isinstance(raw.columns, pd.MultiIndex):
+            return raw.copy()
+        if ticker in raw.columns.get_level_values(0):
+            df = raw[ticker].copy()
+        else:
+            df = raw.xs(ticker, axis=1, level=1).copy()
         return df if not df.empty else None
     except KeyError:
         return None
