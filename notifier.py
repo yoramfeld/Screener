@@ -68,13 +68,9 @@ def _format_signal(sig: Signal) -> str:
     )
 
 
-def send_started(first_ticker: str, next_ticker: str, total: int) -> None:
-    """Send the 'screening started' message after the first ticker is evaluated."""
-    text = (
-        f"🔍 Started with *{first_ticker}*, moving to *{next_ticker}* and others "
-        f"({total} stocks total)..."
-    )
-    _post(text)
+def send_started(total: int) -> None:
+    """Send the 'downloading' message before the batch data fetch begins."""
+    _post(f"⏳ Downloading stocks data for {total} stocks... it takes a minute.")
 
 
 def send_signal(sig: Signal) -> None:

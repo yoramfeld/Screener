@@ -51,7 +51,7 @@ def main() -> None:
     tickers = universe.get_universe()
 
     # 3. Send started message immediately — before the slow batch download
-    notifier.send_started(tickers[0], tickers[1] if len(tickers) > 1 else "", len(tickers))
+    notifier.send_started(len(tickers))
 
     # 4. Stream signals — send each match immediately as it's found
     signals_sent = 0
