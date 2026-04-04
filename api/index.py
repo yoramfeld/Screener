@@ -99,14 +99,26 @@ def webhook():
                 _send_message("Invalid price. Usage: `/buy AAPL 182.40`")
 
     elif cmd == "/sell":
-        if len(parts) != 2:
-            _send_message("Usage: `/sell AAPL`")
+        if len(parts) != 3:
+            _send_message("Usage: `/sell AAPL 185.20`")
         else:
-            ticker = parts[1].upper()
-            if portfolio.remove_position(ticker):
-                _send_message(f"✅ *{ticker}* removed from portfolio.")
-            else:
-                _send_message(f"*{ticker}* not found in portfolio.")
+            try:
+                ticker     = parts[1].upper()
+                sell_price = float(parts[2])
+                trade = portfolio.close_position(ticker, sell_price)
+                if trade:
+                    emoji = "🟢" if trade["pct_pnl"] >= 0 else "🔴"
+                    sign  = "+" if trade["pct_pnl"] >= 0 else ""
+                    _send_message(
+                        f"{emoji} *{ticker}* closed\n"
+                        f"  Buy: ${trade['buy_price']} ({trade['buy_date']})\n"
+                        f"  Sell: ${trade['sell_price']} ({trade['sell_date']})\n"
+                        f"  P&L: {sign}{trade['pct_pnl']}%"
+                    )
+                else:
+                    _send_message(f"*{ticker}* not found in portfolio.")
+            except ValueError:
+                _send_message("Invalid price. Usage: `/sell AAPL 185.20`")
 
     elif cmd == "/portfolio":
         positions = portfolio.enrich_positions()
@@ -116,15 +128,15 @@ def webhook():
         _send_message(
             "Bot is active. Commands:\n"
             "`/run` — scan now\n"
-            "`/buy AAPL 182.40` — track a position\n"
-            "`/sell AAPL` — remove a position\n"
-            "`/portfolio` — view stops"
+            "`/buy AAPL 182.40` — record a buy\n"
+            "`/sell AAPL 185.20` — record a sell + P&L\n"
+            "`/portfolio` — view open positions & stops"
         )
 
     else:
         _send_message(
             "Unknown command. Available:\n"
-            "`/run` `//buy TICKER PRICE` `/sell TICKER` `/portfolio`"
+            "`/run`  `/buy TICKER PRICE`  `/sell TICKER PRICE`  `/portfolio`"
         )
 
     return "OK", 200

@@ -24,7 +24,7 @@ log = logging.getLogger(__name__)
 
 STOP_BELOW_SMA = 0.02  # stop placed 2% below SMA150
 
-_CREATE = """
+_CREATE_POSITIONS = """
 CREATE TABLE IF NOT EXISTS positions (
     ticker     TEXT PRIMARY KEY,
     buy_price  REAL NOT NULL,
@@ -32,14 +32,28 @@ CREATE TABLE IF NOT EXISTS positions (
 );
 """
 
+_CREATE_TRADES = """
+CREATE TABLE IF NOT EXISTS trades (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    ticker     TEXT    NOT NULL,
+    buy_price  REAL    NOT NULL,
+    buy_date   TEXT    NOT NULL,
+    sell_price REAL    NOT NULL,
+    sell_date  TEXT    NOT NULL,
+    pct_pnl    REAL    NOT NULL
+);
+"""
+
 Position = Dict  # {ticker, buy_price, buy_date, current, pct_change, sma150, stop}
+Trade    = Dict  # {ticker, buy_price, buy_date, sell_price, sell_date, pct_pnl}
 
 
 @contextmanager
 def _conn():
     con = sqlite3.connect(config.DB_PATH)
     try:
-        con.execute(_CREATE)
+        con.execute(_CREATE_POSITIONS)
+        con.execute(_CREATE_TRADES)
         con.commit()
         yield con
     finally:
@@ -61,12 +75,34 @@ def add_position(ticker: str, buy_price: float) -> None:
     log.info("Position added: %s @ $%.2f", ticker, buy_price)
 
 
-def remove_position(ticker: str) -> bool:
+def close_position(ticker: str, sell_price: float) -> Optional[Trade]:
+    """Record the sell, compute P&L, remove from positions. Returns the trade or None if not found."""
     ticker = ticker.upper()
     with _conn() as con:
-        cur = con.execute("DELETE FROM positions WHERE ticker=?", (ticker,))
+        row = con.execute(
+            "SELECT buy_price, buy_date FROM positions WHERE ticker=?", (ticker,)
+        ).fetchone()
+        if not row:
+            return None
+        buy_price, buy_date = row
+        pct_pnl = (sell_price - buy_price) / buy_price * 100
+        sell_date = date.today().isoformat()
+        con.execute(
+            "INSERT INTO trades (ticker, buy_price, buy_date, sell_price, sell_date, pct_pnl) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (ticker, buy_price, buy_date, sell_price, sell_date, round(pct_pnl, 2)),
+        )
+        con.execute("DELETE FROM positions WHERE ticker=?", (ticker,))
         con.commit()
-    return cur.rowcount > 0
+    log.info("Position closed: %s @ $%.2f (%.2f%%)", ticker, sell_price, pct_pnl)
+    return {
+        "ticker":     ticker,
+        "buy_price":  buy_price,
+        "buy_date":   buy_date,
+        "sell_price": sell_price,
+        "sell_date":  sell_date,
+        "pct_pnl":    round(pct_pnl, 2),
+    }
 
 
 def get_positions() -> List[dict]:
