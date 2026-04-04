@@ -180,12 +180,30 @@ def webhook():
     parts = text.split()
     cmd   = parts[0].lower() if parts else ""
 
+    # ------------------------------------------------------------------ /scan
     if cmd in ("/scan", "/run"):
-        if _trigger("screen"):
-            _send_message("⏳ Downloading stocks data... it takes a minute.")
+        sub = parts[1].lower() if len(parts) > 1 else ""
+        if sub == "above":
+            if _trigger("above"):
+                _send_message("📶 Scanning for stocks above SMA150... one moment.")
+            else:
+                _send_message("Failed to trigger. Check GITHUB_PAT in Vercel env vars.")
+        elif re.fullmatch(r"[A-Za-z]{1,5}", sub):
+            _send_message(_check_stock(sub.upper()))
+        else:
+            if _trigger("screen"):
+                _send_message("⏳ Downloading stocks data... it takes a minute.")
+            else:
+                _send_message("Failed to trigger. Check GITHUB_PAT in Vercel env vars.")
+
+    # ------------------------------------------------------------------ /p
+    elif cmd == "/p":
+        if _trigger("portfolio"):
+            _send_message("📊 Fetching live portfolio... one moment.")
         else:
             _send_message("Failed to trigger. Check GITHUB_PAT in Vercel env vars.")
 
+    # ------------------------------------------------------------------ /buy
     elif cmd == "/buy":
         err = _check_buy(parts)
         if err:
@@ -198,12 +216,12 @@ def webhook():
             portfolio.add_position(ticker, price, quantity)
             _send_message(
                 f"✅ Recorded: *{ticker}* {quantity:g} shares @ ${price:.2f} "
-                f"(cost ${price * quantity:,.2f})\nUse /sma for live price & stop level."
+                f"(cost ${price * quantity:,.2f})\nUse /p for live price & stop level."
             )
 
+    # ------------------------------------------------------------------ /sell
     elif cmd == "/sell":
         import portfolio
-        # Look up held quantity for validation before committing
         ticker = parts[1].upper() if len(parts) >= 2 else ""
         held   = next((p["quantity"] for p in portfolio.get_positions() if p["ticker"] == ticker), None)
         if held is None and ticker:
@@ -230,6 +248,7 @@ def webhook():
                         f"{remain_line}"
                     )
 
+    # ------------------------------------------------------------------ /delete
     elif cmd == "/delete":
         if len(parts) < 2:
             _send_message("Usage: `/delete AAPL`")
@@ -241,41 +260,7 @@ def webhook():
             else:
                 _send_message(f"❌ *{ticker}* not found in your portfolio.")
 
-    elif cmd == "/check":
-        if len(parts) < 2:
-            _send_message("Usage: `/check AAPL`")
-        elif not re.fullmatch(r"[A-Za-z]{1,5}", parts[1]):
-            _send_message(f"❌ `{parts[1]}` doesn't look like a valid ticker")
-        else:
-            _send_message(_check_stock(parts[1].upper()))
-
-    elif cmd == "/above":
-        if _trigger("above"):
-            _send_message("📶 Scanning for stocks above SMA150... one moment.")
-        else:
-            _send_message("Failed to trigger. Check GITHUB_PAT in Vercel env vars.")
-
-    elif cmd == "/sma":
-        if _trigger("portfolio"):
-            _send_message("📊 Fetching live prices & SMA150 stops... one moment.")
-        else:
-            _send_message("Failed to trigger. Check GITHUB_PAT in Vercel env vars.")
-
-    elif cmd == "/portfolio":
-        import portfolio
-        positions = portfolio.get_positions()
-        if not positions:
-            _send_message("📋 *Portfolio* — no open positions.")
-        else:
-            lines = []
-            for p in positions:
-                cost = p["buy_price"] * p["quantity"]
-                lines.append(
-                    f"📌 *{p['ticker']}* — {p['quantity']:g} shares @ ${p['buy_price']} ({p['buy_date']})\n"
-                    f"  Cost basis: ${p['buy_price']:,.2f}/share (${cost:,.2f} total)"
-                )
-            _send_message("📋 *Portfolio*\n\n" + "\n\n".join(lines))
-
+    # ------------------------------------------------------------------ /pnl
     elif cmd == "/pnl":
         import portfolio
         trades = portfolio.get_trades()
@@ -306,29 +291,31 @@ def webhook():
             )
             _send_message("📒 *P&L History*\n\n" + "\n\n".join(lines) + summary)
 
+    # ------------------------------------------------------------------ /market
     elif cmd == "/market":
         _send_message(_market_status())
 
+    # ------------------------------------------------------------------ /help
     elif cmd in ("/start", "/help", "/?"):
         _send_message(
-            "📖 *Commands*\n"
-            "`/scan` — scan all stocks now\n"
-            "`/above` — top 20 stocks above a rising SMA150 (~1 min)\n"
-            "`/check AAPL` — price & SMA150 for a specific stock\n"
+            "📖 *Commands*\n\n"
+            "*Screener*\n"
+            "`/scan` — run screener on all stocks\n"
+            "`/scan above` — top 20 stocks above rising SMA150\n"
+            "`/scan AAPL` — check a specific stock\n\n"
+            "*Portfolio*\n"
+            "`/p` — live prices, SMA150 & stop levels (~30s)\n"
             "`/buy AAPL 182.40 50` — record a buy\n"
             "`/sell AAPL 185.20` — sell all shares\n"
             "`/sell AAPL 185.20 30` — partial sell\n"
-            "`/delete AAPL` — remove a position without recording a trade\n"
-            "`/portfolio` — open positions & cost basis\n"
-            "`/sma` — live price, SMA150 & stop levels (~30s)\n"
-            "`/pnl` — closed trades & total profit\n"
+            "`/delete AAPL` — remove a position\n"
+            "`/pnl` — closed trades & total profit\n\n"
+            "*Info*\n"
             "`/market` — is the market open?\n"
-            "`/help` or `/?` — show this list"
+            "`/help` — show this list"
         )
 
     else:
-        _send_message(
-            "Unknown command. Try `/help` for the full list."
-        )
+        _send_message("Unknown command. Try `/help` for the full list.")
 
     return "OK", 200
