@@ -203,12 +203,10 @@ def enrich_positions() -> List[Position]:
     for pos in positions:
         try:
             ticker = pos["ticker"]
-            if len(tickers) == 1:
-                df = raw.copy()
-                if isinstance(df.columns, pd.MultiIndex):
-                    df.columns = df.columns.get_level_values(0)
-            else:
+            if isinstance(raw.columns, pd.MultiIndex):
                 df = raw.xs(ticker, axis=1, level=1).copy()
+            else:
+                df = raw.copy()
 
             df = df.dropna(subset=["Close"])
             if len(df) < 150:
