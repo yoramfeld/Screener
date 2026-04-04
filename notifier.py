@@ -119,7 +119,7 @@ def _build_message(
         return (
             f"✅ *Swing Screener* — {now}\n"
             f"{screened_line}"
-            f"No setups found today (bounce or cross)."
+            f"No setups found (bounce, cross or RSI)."
         )
 
     header = f"🔔 *Swing Screener* — {now}\n{screened_line}{len(signals)} setup(s) found:\n\n"
