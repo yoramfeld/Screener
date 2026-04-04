@@ -136,6 +136,34 @@ def send_summary(signals: List[Signal], aborted: bool = False, total_screened: i
     _post(_build_message(signals, aborted=aborted, total_screened=total_screened, sample_tickers=sample_tickers, debug=debug))
 
 
+def send_pnl(trades: list) -> None:
+    """Send closed trade history with per-trade and overall P&L."""
+    if not trades:
+        _post("📒 *P&L History* — no closed trades yet.")
+        return
+
+    lines = []
+    for t in trades:
+        emoji = "🟢" if t["pct_pnl"] >= 0 else "🔴"
+        sign  = "+" if t["pct_pnl"] >= 0 else ""
+        lines.append(
+            f"{emoji} *{t['ticker']}*\n"
+            f"  Buy: ${t['buy_price']} ({t['buy_date']})  →  "
+            f"Sell: ${t['sell_price']} ({t['sell_date']})\n"
+            f"  Profit: {sign}{t['pct_pnl']}%"
+        )
+
+    total   = sum(t["pct_pnl"] for t in trades)
+    winners = sum(1 for t in trades if t["pct_pnl"] >= 0)
+    sign    = "+" if total >= 0 else ""
+    summary = (
+        f"\n📊 *Total: {sign}{total:.1f}%* across {len(trades)} trade(s) "
+        f"({winners}W / {len(trades) - winners}L)"
+    )
+
+    _post("📒 *P&L History*\n\n" + "\n\n".join(lines) + summary)
+
+
 def send_portfolio(positions: List[Position]) -> None:
     """Send current stop levels for all open positions."""
     if not positions:

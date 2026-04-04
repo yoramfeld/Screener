@@ -120,6 +120,9 @@ def webhook():
             except ValueError:
                 _send_message("Invalid price. Usage: `/sell AAPL 185.20`")
 
+    elif cmd == "/pnl":
+        notifier.send_pnl(portfolio.get_trades())
+
     elif cmd == "/portfolio":
         positions = portfolio.enrich_positions()
         notifier.send_portfolio(positions)
@@ -130,13 +133,14 @@ def webhook():
             "`/run` — scan now\n"
             "`/buy AAPL 182.40` — record a buy\n"
             "`/sell AAPL 185.20` — record a sell + P&L\n"
-            "`/portfolio` — view open positions & stops"
+            "`/portfolio` — open positions & stop levels\n"
+            "`/pnl` — closed trades & total profit"
         )
 
     else:
         _send_message(
             "Unknown command. Available:\n"
-            "`/run`  `/buy TICKER PRICE`  `/sell TICKER PRICE`  `/portfolio`"
+            "`/run`  `/buy TICKER PRICE`  `/sell TICKER PRICE`  `/portfolio`  `/pnl`"
         )
 
     return "OK", 200

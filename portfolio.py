@@ -105,6 +105,19 @@ def close_position(ticker: str, sell_price: float) -> Optional[Trade]:
     }
 
 
+def get_trades() -> List[Trade]:
+    with _conn() as con:
+        rows = con.execute(
+            "SELECT ticker, buy_price, buy_date, sell_price, sell_date, pct_pnl "
+            "FROM trades ORDER BY sell_date DESC"
+        ).fetchall()
+    return [
+        {"ticker": r[0], "buy_price": r[1], "buy_date": r[2],
+         "sell_price": r[3], "sell_date": r[4], "pct_pnl": r[5]}
+        for r in rows
+    ]
+
+
 def get_positions() -> List[dict]:
     with _conn() as con:
         rows = con.execute(
