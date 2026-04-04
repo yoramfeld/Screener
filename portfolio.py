@@ -204,10 +204,10 @@ def enrich_positions() -> List[Position]:
         try:
             ticker = pos["ticker"]
             if isinstance(raw.columns, pd.MultiIndex):
-                if len(tickers) == 1:
-                    df = raw[ticker].copy()   # single ticker: ticker is top level
+                if ticker in raw.columns.get_level_values(0):
+                    df = raw[ticker].copy()
                 else:
-                    df = raw.xs(ticker, axis=1, level=1).copy()  # multi: field=0, ticker=1
+                    df = raw.xs(ticker, axis=1, level=1).copy()
             else:
                 df = raw.copy()
 
