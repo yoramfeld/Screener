@@ -151,7 +151,7 @@ def webhook():
     parts = text.split()
     cmd   = parts[0].lower() if parts else ""
 
-    if cmd == "/run":
+    if cmd in ("/scan", "/run"):
         if _trigger("screen"):
             _send_message("⏳ Downloading stocks data... it takes a minute.")
         else:
@@ -269,7 +269,7 @@ def webhook():
     elif cmd in ("/start", "/help", "/?"):
         _send_message(
             "📖 *Commands*\n"
-            "`/run` — scan all stocks now\n"
+            "`/scan` — scan all stocks now\n"
             "`/buy AAPL 182.40 50` — record a buy\n"
             "`/sell AAPL 185.20` — sell all shares\n"
             "`/sell AAPL 185.20 30` — partial sell\n"
