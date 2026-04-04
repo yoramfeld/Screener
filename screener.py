@@ -283,15 +283,20 @@ def _evaluate_bounce(ticker: str, df: pd.DataFrame) -> Optional[Signal]:
         return None
 
     close = float(df["Close"].iloc[-1])
-    low = float(df["Low"].iloc[-1])
+    open_ = float(df["Open"].iloc[-1])
+    low   = float(df["Low"].iloc[-1])
 
-    # 2. Touch — low came within PROXIMITY_CAP (3%) above SMA150
+    # 2. Touch — low pulled back within 3% above SMA150
     if not (low < sma_today * (1 + config.PROXIMITY_CAP)):
         return None
 
-    # 3. Reversal — close recovered above low, above SMA150, within 3% of the low
+    # 3. Bounce — bullish candle that closed above SMA150
+    if not (close > open_ and close > sma_today):
+        return None
+
+    # 4. Not extended — close within 5% above SMA150
     pct_from_sma = (close - sma_today) / sma_today
-    if not (close > low and close > sma_today and close < low * (1 + config.PROXIMITY_CAP)):
+    if pct_from_sma > 0.05:
         return None
 
     # 4. Volume filter — today vs 20-day average
