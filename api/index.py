@@ -137,15 +137,16 @@ def webhook():
         positions = portfolio.enrich_positions()
         notifier.send_portfolio(positions)
 
-    elif cmd == "/start":
+    elif cmd in ("/start", "/help", "/?"):
         _send_message(
-            "Bot is active. Commands:\n"
-            "`/run` — scan now\n"
+            "📖 *Commands*\n"
+            "`/run` — scan all stocks now\n"
             "`/buy AAPL 182.40 50` — record a buy (ticker, price, shares)\n"
             "`/sell AAPL 185.20` — sell all shares\n"
             "`/sell AAPL 185.20 30` — partial sell (30 shares)\n"
             "`/portfolio` — open positions & stop levels\n"
-            "`/pnl` — closed trades & total profit"
+            "`/pnl` — closed trades & total profit\n"
+            "`/help` or `/?` — show this list"
         )
 
     else:
