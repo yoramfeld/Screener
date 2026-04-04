@@ -33,16 +33,12 @@ def _format_signal(sig: Signal) -> str:
     earnings_line = "  ⚠️ EARNINGS within 48h — HIGH RISK\n" if sig["earnings_flag"] else ""
     chart = f"  [Chart]({_tradingview_url(sig['ticker'])})"
 
-    if sig["signal_type"] == "golden_cross":
+    if sig["signal_type"] in ("golden_cross", "death_cross"):
+        days_ago = sig.get("days_ago", 0)
+        when = "today" if days_ago == 0 else f"{days_ago}d ago"
+        emoji, label = ("🟡", f"Golden Cross (BUY) — {when}") if sig["signal_type"] == "golden_cross" else ("💀", f"Death Cross (SELL) — {when}")
         return (
-            f"🟡 *{sig['ticker']}* — Golden Cross (BUY)\n"
-            f"  Price: ${sig['close']}  |  SMA50: ${sig['sma50']}  |  SMA200: ${sig['sma200']}\n"
-            f"{earnings_line}"
-            f"{chart}"
-        )
-    if sig["signal_type"] == "death_cross":
-        return (
-            f"💀 *{sig['ticker']}* — Death Cross (SELL)\n"
+            f"{emoji} *{sig['ticker']}* — {label}\n"
             f"  Price: ${sig['close']}  |  SMA50: ${sig['sma50']}  |  SMA200: ${sig['sma200']}\n"
             f"{earnings_line}"
             f"{chart}"

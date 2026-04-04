@@ -2,8 +2,7 @@ name: Swing Screener
 
 on:
   schedule:
-    - cron: '2 10 * * *'      # TEMP TEST — remove after
-    - cron: '30 14 * * 1-5'  # 9:30 AM EST  (14:30 UTC) — market open
+    - cron: '*/5 14-21 * * 1-5'  # every 5 min, 9:30 AM–4:00 PM EST (14:00–21:00 UTC)
   workflow_dispatch:           # manual trigger for testing
 
 jobs:

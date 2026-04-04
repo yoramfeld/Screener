@@ -150,7 +150,7 @@ def _extract_ticker(raw: pd.DataFrame, ticker: str, total: int) -> Optional[pd.D
 
 
 def _evaluate_cross(ticker: str, df: pd.DataFrame) -> Optional[Signal]:
-    """Detect Golden Cross or Death Cross on the most recent bar."""
+    """Detect Golden Cross or Death Cross within the last CROSS_LOOKBACK_DAYS bars."""
     df = df.dropna(subset=["Close"])
     df["sma50"] = df["Close"].rolling(50).mean()
     df["sma200"] = df["Close"].rolling(200).mean()
@@ -158,28 +158,34 @@ def _evaluate_cross(ticker: str, df: pd.DataFrame) -> Optional[Signal]:
     if df["sma50"].isna().iloc[-1] or df["sma200"].isna().iloc[-1]:
         return None
 
-    sma50_today = float(df["sma50"].iloc[-1])
-    sma200_today = float(df["sma200"].iloc[-1])
-    sma50_prev = float(df["sma50"].iloc[-2])
-    sma200_prev = float(df["sma200"].iloc[-2])
     close = float(df["Close"].iloc[-1])
 
-    if sma50_prev <= sma200_prev and sma50_today > sma200_today:
-        signal_type = "golden_cross"
-    elif sma50_prev >= sma200_prev and sma50_today < sma200_today:
-        signal_type = "death_cross"
-    else:
-        return None
+    for i in range(1, config.CROSS_LOOKBACK_DAYS + 1):
+        sma50_cur = float(df["sma50"].iloc[-i])
+        sma50_prv = float(df["sma50"].iloc[-i - 1])
+        sma200_cur = float(df["sma200"].iloc[-i])
+        sma200_prv = float(df["sma200"].iloc[-i - 1])
 
-    earnings_flag = _has_earnings_soon(ticker)
-    return {
-        "signal_type": signal_type,
-        "ticker": ticker,
-        "close": round(close, 2),
-        "sma50": round(sma50_today, 2),
-        "sma200": round(sma200_today, 2),
-        "earnings_flag": earnings_flag,
-    }
+        if sma50_prv <= sma200_prv and sma50_cur > sma200_cur:
+            signal_type = "golden_cross"
+        elif sma50_prv >= sma200_prv and sma50_cur < sma200_cur:
+            signal_type = "death_cross"
+        else:
+            continue
+
+        days_ago = i - 1  # 0 = today, 1 = yesterday, etc.
+        earnings_flag = _has_earnings_soon(ticker)
+        return {
+            "signal_type": signal_type,
+            "ticker": ticker,
+            "close": round(close, 2),
+            "sma50": round(float(df["sma50"].iloc[-1]), 2),
+            "sma200": round(float(df["sma200"].iloc[-1]), 2),
+            "days_ago": days_ago,
+            "earnings_flag": earnings_flag,
+        }
+
+    return None
 
 
 def _evaluate_bounce(ticker: str, df: pd.DataFrame) -> Optional[Signal]:

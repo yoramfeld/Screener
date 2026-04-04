@@ -38,6 +38,7 @@ DB_PATH: str = os.environ.get("DB_PATH", "alerts.db")
 
 # --- Screener knobs ---
 ALERT_COOLDOWN_DAYS: int = int(os.environ.get("ALERT_COOLDOWN_DAYS", "1"))
+CROSS_LOOKBACK_DAYS: int = int(os.environ.get("CROSS_LOOKBACK_DAYS", "3"))
 SPY_DROP_THRESHOLD: float = float(os.environ.get("SPY_DROP_THRESHOLD", "-0.02"))
 VOLUME_MIN_RATIO: float = float(os.environ.get("VOLUME_MIN_RATIO", "0.80"))
 PROXIMITY_CAP: float = float(os.environ.get("PROXIMITY_CAP", "0.03"))
