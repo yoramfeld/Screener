@@ -223,7 +223,7 @@ def webhook():
                 cost = p["buy_price"] * p["quantity"]
                 lines.append(
                     f"📌 *{p['ticker']}* — {p['quantity']:g} shares @ ${p['buy_price']} ({p['buy_date']})\n"
-                    f"  Cost basis: ${cost:,.2f}"
+                    f"  Cost basis: ${p['buy_price']:,.2f}/share (${cost:,.2f} total)"
                 )
             _send_message("📋 *Portfolio*\n\n" + "\n\n".join(lines))
 
