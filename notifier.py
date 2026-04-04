@@ -43,6 +43,20 @@ def _format_signal(sig: Signal) -> str:
             f"{earnings_line}"
             f"{chart}"
         )
+    if sig["signal_type"] == "rsi_oversold":
+        return (
+            f"📉 *{sig['ticker']}* — RSI Oversold (BUY)\n"
+            f"  Price: ${sig['close']}  |  RSI: {sig['rsi']} (< {config.RSI_OVERSOLD})\n"
+            f"{earnings_line}"
+            f"{chart}"
+        )
+    if sig["signal_type"] == "rsi_overbought":
+        return (
+            f"🔴 *{sig['ticker']}* — RSI Overbought (SELL)\n"
+            f"  Price: ${sig['close']}  |  RSI: {sig['rsi']} (> {config.RSI_OVERBOUGHT})\n"
+            f"{earnings_line}"
+            f"{chart}"
+        )
     # bounce
     return (
         f"📈 *{sig['ticker']}* — SMA150 Bounce\n"

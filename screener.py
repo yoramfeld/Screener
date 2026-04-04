@@ -130,6 +130,10 @@ def stream_signals(tickers: List[str]) -> Generator[Signal, None, None]:
             if cross:
                 yield cross
 
+            rsi = _evaluate_rsi(ticker, df)
+            if rsi:
+                yield rsi
+
         except Exception as exc:
             log.debug("Error processing %s: %s", ticker, exc)
 
@@ -186,6 +190,44 @@ def _evaluate_cross(ticker: str, df: pd.DataFrame) -> Optional[Signal]:
         }
 
     return None
+
+
+def _calc_rsi(close: pd.Series, period: int) -> float:
+    """Wilder's RSI using exponential smoothing (alpha = 1/period)."""
+    delta = close.diff()
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+    avg_gain = gain.ewm(alpha=1 / period, min_periods=period, adjust=False).mean()
+    avg_loss = loss.ewm(alpha=1 / period, min_periods=period, adjust=False).mean()
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+    return float(rsi.iloc[-1])
+
+
+def _evaluate_rsi(ticker: str, df: pd.DataFrame) -> Optional[Signal]:
+    """Flag oversold (RSI < RSI_OVERSOLD) or overbought (RSI > RSI_OVERBOUGHT)."""
+    df = df.dropna(subset=["Close"])
+    if len(df) < config.RSI_PERIOD + 1:
+        return None
+
+    rsi = _calc_rsi(df["Close"], config.RSI_PERIOD)
+    close = float(df["Close"].iloc[-1])
+
+    if rsi < config.RSI_OVERSOLD:
+        signal_type = "rsi_oversold"
+    elif rsi > config.RSI_OVERBOUGHT:
+        signal_type = "rsi_overbought"
+    else:
+        return None
+
+    earnings_flag = _has_earnings_soon(ticker)
+    return {
+        "signal_type": signal_type,
+        "ticker": ticker,
+        "close": round(close, 2),
+        "rsi": round(rsi, 1),
+        "earnings_flag": earnings_flag,
+    }
 
 
 def _evaluate_bounce(ticker: str, df: pd.DataFrame) -> Optional[Signal]:
