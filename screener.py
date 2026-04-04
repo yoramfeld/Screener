@@ -196,6 +196,8 @@ def sample_debug(ticker: str = "AAPL") -> str:
     """Return a one-liner of raw metrics for a single ticker — used in the no-signals message."""
     try:
         df = yf.download(ticker, period="200d", interval="1d", auto_adjust=True, progress=False)
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
         df = df.dropna(subset=["Close"])
         if len(df) < 205:
             return f"{ticker}: not enough data"
