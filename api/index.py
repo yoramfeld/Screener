@@ -16,6 +16,7 @@ Vercel only handles fast command routing.
 """
 
 import os
+import re
 import sys
 from zoneinfo import ZoneInfo
 
@@ -25,6 +26,59 @@ import requests
 from flask import Flask, abort, request
 
 import config
+
+
+def _check_buy(parts: list) -> str:
+    """Return an error string if /buy args are invalid, else empty string."""
+    if len(parts) != 4:
+        return "Usage: `/buy AAPL 182.40 50`"
+    _, ticker, price_str, qty_str = parts
+    if not re.fullmatch(r"[A-Za-z]{1,5}", ticker):
+        return f"❌ `{ticker}` doesn't look like a valid ticker (1–5 letters)"
+    try:
+        price = float(price_str)
+    except ValueError:
+        return f"❌ `{price_str}` is not a valid price"
+    try:
+        qty = float(qty_str)
+    except ValueError:
+        return f"❌ `{qty_str}` is not a valid quantity"
+    if price <= 0:
+        return "❌ Price must be greater than 0"
+    if price > 100_000:
+        return f"❌ Price ${price:,.2f} looks too high — double-check"
+    if qty <= 0:
+        return "❌ Quantity must be greater than 0"
+    if qty > 1_000_000:
+        return f"❌ Quantity {qty:,} looks too high — double-check"
+    return ""
+
+
+def _check_sell(parts: list, held_qty: float = None) -> str:
+    """Return an error string if /sell args are invalid, else empty string."""
+    if len(parts) < 3 or len(parts) > 4:
+        return "Usage: `/sell AAPL 185.20` or `/sell AAPL 185.20 30`"
+    _, ticker, price_str = parts[:3]
+    if not re.fullmatch(r"[A-Za-z]{1,5}", ticker):
+        return f"❌ `{ticker}` doesn't look like a valid ticker (1–5 letters)"
+    try:
+        price = float(price_str)
+    except ValueError:
+        return f"❌ `{price_str}` is not a valid price"
+    if price <= 0:
+        return "❌ Price must be greater than 0"
+    if price > 100_000:
+        return f"❌ Price ${price:,.2f} looks too high — double-check"
+    if len(parts) == 4:
+        try:
+            qty = float(parts[3])
+        except ValueError:
+            return f"❌ `{parts[3]}` is not a valid quantity"
+        if qty <= 0:
+            return "❌ Quantity must be greater than 0"
+        if held_qty is not None and qty > held_qty:
+            return f"❌ You only hold {held_qty:g} shares — can't sell {qty:g}"
+    return ""
 
 app = Flask(__name__)
 
@@ -104,29 +158,32 @@ def webhook():
             _send_message("Failed to trigger. Check GITHUB_PAT in Vercel env vars.")
 
     elif cmd == "/buy":
-        if len(parts) != 4:
-            _send_message("Usage: `/buy AAPL 182.40 50`")
+        err = _check_buy(parts)
+        if err:
+            _send_message(err)
         else:
-            try:
-                import portfolio
-                ticker   = parts[1].upper()
-                price    = float(parts[2])
-                quantity = float(parts[3])
-                portfolio.add_position(ticker, price, quantity)
-                _send_message(
-                    f"✅ Recorded: *{ticker}* {quantity:g} shares @ ${price:.2f} "
-                    f"(cost ${price * quantity:,.2f})\nStop tracked with each screener run."
-                )
-            except ValueError:
-                _send_message("Invalid input. Usage: `/buy AAPL 182.40 50`")
+            import portfolio
+            ticker   = parts[1].upper()
+            price    = float(parts[2])
+            quantity = float(parts[3])
+            portfolio.add_position(ticker, price, quantity)
+            _send_message(
+                f"✅ Recorded: *{ticker}* {quantity:g} shares @ ${price:.2f} "
+                f"(cost ${price * quantity:,.2f})\nStop tracked with each screener run."
+            )
 
     elif cmd == "/sell":
-        if len(parts) < 3:
-            _send_message("Usage: `/sell AAPL 185.20` or `/sell AAPL 185.20 30` (partial)")
+        import portfolio
+        # Look up held quantity for validation before committing
+        ticker = parts[1].upper() if len(parts) >= 2 else ""
+        held   = next((p["quantity"] for p in portfolio.get_positions() if p["ticker"] == ticker), None)
+        if held is None and ticker:
+            _send_message(f"❌ *{ticker}* not found in your portfolio.")
         else:
-            try:
-                import portfolio
-                ticker     = parts[1].upper()
+            err = _check_sell(parts, held_qty=held)
+            if err:
+                _send_message(err)
+            else:
                 sell_price = float(parts[2])
                 quantity   = float(parts[3]) if len(parts) == 4 else None
                 trade = portfolio.close_position(ticker, sell_price, quantity)
@@ -143,10 +200,6 @@ def webhook():
                         f"  P&L: {sign}{trade['pct_pnl']}% ({dollar_sign}${trade['dollar_pnl']:,.2f})"
                         f"{remain_line}"
                     )
-                else:
-                    _send_message(f"*{ticker}* not found in portfolio.")
-            except ValueError:
-                _send_message("Invalid price. Usage: `/sell AAPL 185.20`")
 
     elif cmd == "/portfolio":
         if _trigger("portfolio"):
