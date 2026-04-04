@@ -54,6 +54,38 @@ def _format_signal(sig: Signal) -> str:
     )
 
 
+def send_started(first_ticker: str, next_ticker: str, total: int) -> None:
+    """Send the 'screening started' message after the first ticker is evaluated."""
+    text = (
+        f"🔍 Started with *{first_ticker}*, moving to *{next_ticker}* and others "
+        f"({total} stocks total)..."
+    )
+    _post(text)
+
+
+def send_signal(sig: Signal) -> None:
+    """Send a single signal immediately as it's found."""
+    _post(_format_signal(sig))
+
+
+def _post(text: str) -> None:
+    """Raw Telegram send."""
+    if not config.TELEGRAM_BOT_TOKEN or not config.TELEGRAM_CHAT_ID:
+        log.error("Telegram credentials not configured")
+        return
+    url = _TELEGRAM_URL.format(token=config.TELEGRAM_BOT_TOKEN)
+    try:
+        resp = requests.post(
+            url,
+            json={"chat_id": config.TELEGRAM_CHAT_ID, "text": text, "parse_mode": "Markdown", "disable_web_page_preview": False},
+            timeout=10,
+        )
+        if not resp.ok:
+            log.error("Telegram send failed: %s — %s", resp.status_code, resp.text)
+    except Exception as exc:
+        log.error("Telegram send error: %s", exc)
+
+
 def _build_message(
     signals: List[Signal],
     aborted: bool = False,
@@ -85,28 +117,6 @@ def _build_message(
     return header + body
 
 
-def send(signals: List[Signal], aborted: bool = False, total_screened: int = 0, sample_tickers: List[str] = []) -> bool:
-    """Send a Telegram message. Returns True on success."""
-    if not config.TELEGRAM_BOT_TOKEN or not config.TELEGRAM_CHAT_ID:
-        log.error("Telegram credentials not configured — skipping notification")
-        return False
-
-    message = _build_message(signals, aborted=aborted, total_screened=total_screened, sample_tickers=sample_tickers)
-    url = _TELEGRAM_URL.format(token=config.TELEGRAM_BOT_TOKEN)
-    payload = {
-        "chat_id": config.TELEGRAM_CHAT_ID,
-        "text": message,
-        "parse_mode": "Markdown",
-        "disable_web_page_preview": False,
-    }
-
-    try:
-        resp = requests.post(url, json=payload, timeout=10)
-        if resp.ok:
-            log.info("Telegram message sent (%d signal(s))", len(signals))
-            return True
-        log.error("Telegram send failed: %s — %s", resp.status_code, resp.text)
-        return False
-    except Exception as exc:
-        log.error("Telegram send error: %s", exc)
-        return False
+def send_summary(signals: List[Signal], aborted: bool = False, total_screened: int = 0, sample_tickers: List[str] = []) -> None:
+    """Send the end-of-run summary (abort notice or 'no signals found')."""
+    _post(_build_message(signals, aborted=aborted, total_screened=total_screened, sample_tickers=sample_tickers))

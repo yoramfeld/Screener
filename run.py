@@ -43,32 +43,31 @@ def main() -> None:
 
     # 1. Market context — abort early if SPY is in a sharp sell-off
     if not screener.market_is_healthy():
-        notifier.send([], aborted=True)
+        notifier.send_summary([], aborted=True)
         log.warning("Run aborted: SPY below threshold")
         return
 
     # 2. Fetch universe (~600 tickers)
     tickers = universe.get_universe()
 
-    # 3. Screen — batch download + apply all filters
-    all_signals = screener.screen(tickers)
+    # 3. Stream signals — send each match immediately as it's found
+    signals_sent = 0
 
-    # 4. Deduplicate — each (ticker, signal_type) pair tracked independently
-    new_signals = [
-        s for s in all_signals
-        if not database.was_alerted(s["ticker"], s["signal_type"])
-    ]
-    skipped = len(all_signals) - len(new_signals)
-    if skipped:
-        log.info("Skipped %d already-alerted signal(s)", skipped)
+    def on_first_evaluated(first: str, next_t: str) -> None:
+        notifier.send_started(first, next_t, len(tickers))
 
-    # 5. Persist before sending
-    for s in new_signals:
-        database.mark_alerted(s["ticker"], s["signal_type"])
+    for signal in screener.stream_signals(tickers, on_first_evaluated=on_first_evaluated):
+        if database.was_alerted(signal["ticker"], signal["signal_type"]):
+            continue
+        database.mark_alerted(signal["ticker"], signal["signal_type"])
+        notifier.send_signal(signal)
+        signals_sent += 1
 
-    # 6. Dispatch
-    notifier.send(new_signals, total_screened=len(tickers), sample_tickers=tickers[:3])
-    log.info("Done — %d new signal(s) sent", len(new_signals))
+    # 4. End summary — only needed when nothing was found
+    if signals_sent == 0:
+        notifier.send_summary([], total_screened=len(tickers), sample_tickers=tickers[:3])
+
+    log.info("Done — %d signal(s) sent", signals_sent)
 
 
 if __name__ == "__main__":

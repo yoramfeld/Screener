@@ -18,7 +18,7 @@ Returns a list of Signal dicts — one per qualifying ticker.
 
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional
+from typing import Callable, Dict, Generator, List, Optional
 
 import pandas as pd
 import yfinance as yf
@@ -93,15 +93,21 @@ def _has_earnings_soon(ticker: str) -> bool:
 # Main scanner
 # ---------------------------------------------------------------------------
 
-def screen(tickers: List[str]) -> List[Signal]:
+def stream_signals(
+    tickers: List[str],
+    on_first_evaluated: Optional[Callable[[str, str], None]] = None,
+) -> Generator[Signal, None, None]:
     """
-    Download OHLCV for all tickers in one batch call, then apply filters.
-    Returns qualifying signals sorted by pct_from_sma ascending (closest to SMA first).
+    Download OHLCV for all tickers in one batch call, then yield signals as
+    they are found — one at a time — so callers can act on each immediately.
+
+    on_first_evaluated(first_ticker, next_ticker) is called after the first
+    ticker is processed, giving the caller a chance to send a "started" message.
     """
     if not tickers:
-        return []
+        return
 
-    log.info("Downloading data for %d tickers …", len(tickers))
+    log.info("Downloading data for %d tickers ...", len(tickers))
     raw = yf.download(
         tickers,
         period="200d",
@@ -112,28 +118,30 @@ def screen(tickers: List[str]) -> List[Signal]:
         threads=True,
     )
 
-    signals: List[Signal] = []
-
-    for ticker in tickers:
+    for i, ticker in enumerate(tickers):
         try:
             df = _extract_ticker(raw, ticker, len(tickers))
+
+            # Fire the "started" callback after the first ticker is evaluated
+            if i == 0 and on_first_evaluated:
+                next_ticker = tickers[1] if len(tickers) > 1 else ""
+                on_first_evaluated(ticker, next_ticker)
+
             if df is None or len(df) < 205:
-                # Need at least 200 bars for SMA200 + a prior bar to detect crosses
                 continue
 
             bounce = _evaluate_bounce(ticker, df)
             if bounce:
-                signals.append(bounce)
+                yield bounce
 
             cross = _evaluate_cross(ticker, df)
             if cross:
-                signals.append(cross)
+                yield cross
+
         except Exception as exc:
             log.debug("Error processing %s: %s", ticker, exc)
 
-    signals.sort(key=lambda s: s["signal_type"])
-    log.info("Screen complete — %d signal(s) found", len(signals))
-    return signals
+    log.info("Stream complete")
 
 
 def _extract_ticker(raw: pd.DataFrame, ticker: str, total: int) -> Optional[pd.DataFrame]:
