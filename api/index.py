@@ -74,7 +74,9 @@ def webhook():
     text = body.get("message", {}).get("text", "").strip().lower()
 
     if text == "/run":
-        if not _trigger_screener():
+        if _trigger_screener():
+            _send_message("⏳ Downloading stocks data... it takes a minute.")
+        else:
             _send_message("Failed to trigger the screener. Check GITHUB_PAT in Vercel env vars.")
     elif text == "/start":
         _send_message("Bot is active. Send /run to trigger the screener.")
