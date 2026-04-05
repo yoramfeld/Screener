@@ -90,6 +90,31 @@ def _has_earnings_soon(ticker: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Analyst recommendations
+# ---------------------------------------------------------------------------
+
+def _get_analyst_rec(ticker: str) -> dict:
+    """Return {buy, hold, sell, target} or {} if data unavailable."""
+    try:
+        t = yf.Ticker(ticker)
+        summary = t.recommendations_summary
+        if summary is not None and not summary.empty and "0m" in summary["period"].values:
+            row  = summary[summary["period"] == "0m"].iloc[0]
+            buy  = int(row.get("strongBuy", 0)) + int(row.get("buy", 0))
+            hold = int(row.get("hold", 0))
+            sell = int(row.get("sell", 0)) + int(row.get("strongSell", 0))
+        else:
+            buy = hold = sell = 0
+        targets = t.analyst_price_targets or {}
+        target  = round(float(targets.get("mean", 0)), 0) or None
+        if buy == 0 and hold == 0 and sell == 0:
+            return {}
+        return {"buy": buy, "hold": hold, "sell": sell, "target": target}
+    except Exception:
+        return {}
+
+
+# ---------------------------------------------------------------------------
 # Main scanner
 # ---------------------------------------------------------------------------
 
@@ -180,16 +205,18 @@ def _evaluate_cross(ticker: str, df: pd.DataFrame) -> Optional[Signal]:
         else:
             continue
 
-        days_ago = i - 1  # 0 = today, 1 = yesterday, etc.
+        days_ago      = i - 1  # 0 = today, 1 = yesterday, etc.
         earnings_flag = _has_earnings_soon(ticker)
+        analyst_rec   = _get_analyst_rec(ticker)
         return {
             "signal_type": signal_type,
-            "ticker": ticker,
-            "close": round(close, 2),
-            "sma50": round(float(df["sma50"].iloc[-1]), 2),
-            "sma200": round(float(df["sma200"].iloc[-1]), 2),
-            "days_ago": days_ago,
+            "ticker":      ticker,
+            "close":       round(close, 2),
+            "sma50":       round(float(df["sma50"].iloc[-1]), 2),
+            "sma200":      round(float(df["sma200"].iloc[-1]), 2),
+            "days_ago":    days_ago,
             "earnings_flag": earnings_flag,
+            "analyst_rec": analyst_rec,
         }
 
     return None
@@ -323,12 +350,14 @@ def _evaluate_rsi(ticker: str, df: pd.DataFrame) -> Optional[Signal]:
         return None
 
     earnings_flag = _has_earnings_soon(ticker)
+    analyst_rec   = _get_analyst_rec(ticker)
     return {
         "signal_type": signal_type,
-        "ticker": ticker,
-        "close": round(close, 2),
-        "rsi": round(rsi, 1),
+        "ticker":      ticker,
+        "close":       round(close, 2),
+        "rsi":         round(rsi, 1),
         "earnings_flag": earnings_flag,
+        "analyst_rec": analyst_rec,
     }
 
 
@@ -372,15 +401,17 @@ def _evaluate_bounce(ticker: str, df: pd.DataFrame) -> Optional[Signal]:
     if volume_ratio < config.VOLUME_MIN_RATIO:
         return None
 
-    # 5. Earnings guard (individual API call — only for qualifying tickers)
+    # 5. Earnings guard + analyst rec (individual API calls — only for qualifying tickers)
     earnings_flag = _has_earnings_soon(ticker)
+    analyst_rec   = _get_analyst_rec(ticker)
 
     return {
-        "signal_type": "bounce",
-        "ticker": ticker,
-        "close": round(close, 2),
-        "sma150": round(sma_today, 2),
-        "pct_from_sma": round(pct_from_sma * 100, 2),  # stored as %
-        "volume_ratio": round(volume_ratio * 100, 1),   # stored as %
+        "signal_type":  "bounce",
+        "ticker":       ticker,
+        "close":        round(close, 2),
+        "sma150":       round(sma_today, 2),
+        "pct_from_sma": round(pct_from_sma * 100, 2),
+        "volume_ratio": round(volume_ratio * 100, 1),
         "earnings_flag": earnings_flag,
+        "analyst_rec":  analyst_rec,
     }

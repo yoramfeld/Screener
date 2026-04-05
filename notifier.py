@@ -30,8 +30,21 @@ def _tradingview_url(ticker: str) -> str:
     return f"https://www.tradingview.com/chart/?symbol={exchange}:{ticker}"
 
 
+def _analyst_line(sig: Signal) -> str:
+    rec = sig.get("analyst_rec", {})
+    if not rec:
+        return ""
+    parts = []
+    if rec.get("buy"):  parts.append(f"{rec['buy']} Buy")
+    if rec.get("hold"): parts.append(f"{rec['hold']} Hold")
+    if rec.get("sell"): parts.append(f"{rec['sell']} Sell")
+    target_str = f"  |  Target: ${rec['target']:.0f}" if rec.get("target") else ""
+    return f"  📊 {' · '.join(parts)}{target_str}\n"
+
+
 def _format_signal(sig: Signal) -> str:
     earnings_line = "  ⚠️ EARNINGS within 48h — HIGH RISK\n" if sig["earnings_flag"] else ""
+    analyst_line  = _analyst_line(sig)
     chart = f"  [Chart]({_tradingview_url(sig['ticker'])})"
 
     if sig["signal_type"] in ("golden_cross", "death_cross"):
@@ -42,6 +55,7 @@ def _format_signal(sig: Signal) -> str:
             f"{emoji} *{sig['ticker']}* — {label}\n"
             f"  Price: ${sig['close']}  |  SMA50: ${sig['sma50']}  |  SMA200: ${sig['sma200']}\n"
             f"{earnings_line}"
+            f"{analyst_line}"
             f"{chart}"
         )
     if sig["signal_type"] == "rsi_oversold":
@@ -49,6 +63,7 @@ def _format_signal(sig: Signal) -> str:
             f"📉 *{sig['ticker']}* — RSI Oversold (BUY)\n"
             f"  Price: ${sig['close']}  |  RSI: {sig['rsi']} (< {config.RSI_OVERSOLD})\n"
             f"{earnings_line}"
+            f"{analyst_line}"
             f"{chart}"
         )
     if sig["signal_type"] == "rsi_overbought":
@@ -56,6 +71,7 @@ def _format_signal(sig: Signal) -> str:
             f"🔴 *{sig['ticker']}* — RSI Overbought (SELL)\n"
             f"  Price: ${sig['close']}  |  RSI: {sig['rsi']} (> {config.RSI_OVERBOUGHT})\n"
             f"{earnings_line}"
+            f"{analyst_line}"
             f"{chart}"
         )
     # bounce
@@ -65,6 +81,7 @@ def _format_signal(sig: Signal) -> str:
         f"(+{sig['pct_from_sma']}%)\n"
         f"  Volume: {sig['volume_ratio']}% of avg\n"
         f"{earnings_line}"
+        f"{analyst_line}"
         f"{chart}"
     )
 
