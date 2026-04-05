@@ -29,17 +29,29 @@ log = logging.getLogger(__name__)
 _MARKET_OPEN_UTC  = (14, 30)
 _MARKET_CLOSE_UTC = (21,  0)
 
+_HOLIDAYS = {
+    # NYSE holidays 2025
+    "2025-01-01", "2025-01-20", "2025-02-17", "2025-04-18",
+    "2025-05-26", "2025-07-04", "2025-09-01", "2025-11-27", "2025-12-25",
+    # NYSE holidays 2026
+    "2026-01-01", "2026-01-19", "2026-02-16", "2026-04-03",
+    "2026-05-25", "2026-07-03", "2026-09-07", "2026-11-26", "2026-12-25",
+}
 
-def _within_trading_hours() -> bool:
-    now = datetime.now(tz=timezone.utc)
+
+def _market_is_open() -> bool:
+    now      = datetime.now(tz=timezone.utc)
+    date_str = now.strftime("%Y-%m-%d")
+    if date_str in _HOLIDAYS:
+        return False
     t = (now.hour, now.minute)
     return _MARKET_OPEN_UTC <= t <= _MARKET_CLOSE_UTC
 
 
 def run_screen() -> None:
     is_manual = os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch"
-    if not is_manual and not _within_trading_hours():
-        log.info("Outside trading hours — exiting")
+    if not is_manual and not _market_is_open():
+        log.info("Market closed or holiday — exiting")
         return
 
     if not screener.market_is_healthy():
