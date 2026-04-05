@@ -280,5 +280,25 @@ def send_backtest(stats: dict, years: int = 3) -> None:
             f"|  Worst: *{s['worst']['ticker']}* {sign(s['worst']['ret'])}{s['worst']['ret']}%"
         )
 
+    # --- Conclusion: rank by composite score = win_rate_20d × avg_ret_20d ---
+    scored = []
+    for signal_type, (emoji, label) in _LABELS.items():
+        s = stats.get(signal_type, {})
+        if s and s.get("count", 0) >= 50:   # ignore signals with too few samples
+            score = s["win_rate_20d"] * s["avg_ret_20d"]
+            scored.append((score, emoji, label, s))
+    scored.sort(reverse=True)
+
+    medals = ["🥇", "🥈", "🥉"]
+    conclusion_lines = []
+    for idx, (score, emoji, label, s) in enumerate(scored[:3]):
+        sign = lambda r: "+" if r >= 0 else ""
+        conclusion_lines.append(
+            f"{medals[idx]} *{label}*\n"
+            f"  Win rate 20d: {s['win_rate_20d']}%  |  Avg return 20d: {sign(s['avg_ret_20d'])}{s['avg_ret_20d']}%  |  Score: {score:.1f}"
+        )
+
+    conclusion = "\n\n🏆 *Top 3 Signals*\n\n" + "\n\n".join(conclusion_lines) if conclusion_lines else ""
+
     header = f"📊 *Backtest — {years} Years (as of {now})*\n\n"
-    _post(header + "\n\n".join(lines))
+    _post(header + "\n\n".join(lines) + conclusion)
