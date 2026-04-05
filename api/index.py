@@ -198,10 +198,10 @@ def webhook():
 
     # ------------------------------------------------------------------ /p
     elif cmd == "/p":
-        if _trigger("portfolio"):
-            _send_message("📊 Fetching live portfolio... one moment.")
-        else:
-            _send_message("Failed to trigger. Check GITHUB_PAT in Vercel env vars.")
+        import portfolio as pf
+        import notifier
+        positions = pf.enrich_positions()
+        notifier.send_portfolio(positions)
 
     # ------------------------------------------------------------------ /buy
     elif cmd == "/buy":
