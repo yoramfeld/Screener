@@ -14,6 +14,7 @@ import os
 import sys
 from datetime import datetime, timezone
 
+import backtest
 import database
 import notifier
 import portfolio
@@ -91,6 +92,12 @@ def run_above() -> None:
     notifier.send_above(matches)
 
 
+def run_backtest() -> None:
+    tickers = universe.get_universe()
+    stats   = backtest.run(tickers, years=3)
+    notifier.send_backtest(stats, years=3)
+
+
 def run_pnl() -> None:
     trades = portfolio.get_trades()
     notifier.send_pnl(trades)
@@ -98,7 +105,7 @@ def run_pnl() -> None:
 
 if __name__ == "__main__":
     run_type = os.environ.get("RUN_TYPE", "screen")
-    dispatch = {"screen": run_screen, "portfolio": run_portfolio, "pnl": run_pnl, "above": run_above}
+    dispatch = {"screen": run_screen, "portfolio": run_portfolio, "pnl": run_pnl, "above": run_above, "backtest": run_backtest}
     fn = dispatch.get(run_type, run_screen)
     try:
         fn()

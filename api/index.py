@@ -185,7 +185,12 @@ def webhook():
     # ------------------------------------------------------------------ /scan
     if cmd in ("/scan", "/run"):
         sub = parts[1].lower() if len(parts) > 1 else ""
-        if sub == "above":
+        if sub == "backtest":
+            if _trigger("backtest"):
+                _send_message("📊 Running backtest on 3 years of data... takes ~5 min.")
+            else:
+                _send_message("Failed to trigger. Check GITHUB_PAT in Vercel env vars.")
+        elif sub == "above":
             if _trigger("above"):
                 _send_message("📶 Scanning for stocks above SMA150... one moment.")
             else:
@@ -304,7 +309,8 @@ def webhook():
             "*Screener*\n"
             "`/scan` — run screener on all stocks\n"
             "`/scan above` — top 20 stocks above rising SMA150\n"
-            "`/scan AAPL` — check a specific stock\n\n"
+            "`/scan AAPL` — check a specific stock\n"
+            "`/scan backtest` — backtest signals on 3 years of data (~5 min)\n\n"
             "*Portfolio*\n"
             "`/p` — live prices, SMA150 & stop levels (~30s)\n"
             "`/buy AAPL 182.40 50` — record a buy\n"

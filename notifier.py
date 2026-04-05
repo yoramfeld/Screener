@@ -230,3 +230,37 @@ def send_above(matches: list) -> None:
 
     header = f"📶 *Above SMA150* — {now}\n_{len(matches)} stocks, sorted by proximity_\n\n"
     _post(header + "\n".join(lines))
+
+
+def send_backtest(stats: dict, years: int = 3) -> None:
+    """Send backtest results summary."""
+    from datetime import datetime, timezone
+    now = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
+
+    _LABELS = {
+        "bounce":        ("📈", "SMA150 Bounce"),
+        "golden_cross":  ("🟡", "Golden Cross"),
+        "death_cross":   ("💀", "Death Cross"),
+        "rsi_oversold":  ("📉", "RSI Oversold"),
+        "rsi_overbought":("🔴", "RSI Overbought"),
+    }
+
+    lines = []
+    for signal_type, (emoji, label) in _LABELS.items():
+        s = stats.get(signal_type, {})
+        if not s or s.get("count", 0) == 0:
+            lines.append(f"{emoji} *{label}* — no signals found")
+            continue
+        sign = lambda r: "+" if r >= 0 else ""
+        lines.append(
+            f"{emoji} *{label}* — {s['count']} signals\n"
+            f"  Win rate:  5d {s['win_rate_5d']}%  ·  10d {s['win_rate_10d']}%  ·  20d {s['win_rate_20d']}%\n"
+            f"  Avg return: 5d {sign(s['avg_ret_5d'])}{s['avg_ret_5d']}%  ·  "
+            f"10d {sign(s['avg_ret_10d'])}{s['avg_ret_10d']}%  ·  "
+            f"20d {sign(s['avg_ret_20d'])}{s['avg_ret_20d']}%\n"
+            f"  Best: *{s['best']['ticker']}* {sign(s['best']['ret'])}{s['best']['ret']}%  "
+            f"|  Worst: *{s['worst']['ticker']}* {sign(s['worst']['ret'])}{s['worst']['ret']}%"
+        )
+
+    header = f"📊 *Backtest — {years} Years (as of {now})*\n\n"
+    _post(header + "\n\n".join(lines))
