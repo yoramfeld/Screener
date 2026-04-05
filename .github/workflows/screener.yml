@@ -2,7 +2,7 @@ name: Swing Screener
 
 on:
   schedule:
-    - cron: '*/30 14-21 * * 1-5'  # every 30 min, 9:30 AM–4:00 PM EST (14:00–21:00 UTC)
+    - cron: '30 14 * * 1-5'  # once at market open, 9:30 AM ET (14:30 UTC)
   workflow_dispatch:
     inputs:
       run_type:
