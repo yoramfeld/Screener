@@ -167,6 +167,10 @@ def stream_signals(tickers: List[str]) -> Generator[Signal, None, None]:
             if pullback:
                 yield pullback
 
+            atr = _evaluate_atr_trailing(ticker, df)
+            if atr:
+                yield atr
+
         except Exception as exc:
             log.debug("Error processing %s: %s", ticker, exc)
 
@@ -327,6 +331,95 @@ def sample_debug(ticker: str = "AAPL") -> str:
         )
     except Exception as exc:
         return f"Debug fetch failed: {exc}"
+
+
+def _calc_atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
+    """Average True Range using Wilder's EMA."""
+    prev_close = df["Close"].shift(1)
+    tr = pd.concat([
+        df["High"] - df["Low"],
+        (df["High"] - prev_close).abs(),
+        (df["Low"]  - prev_close).abs(),
+    ], axis=1).max(axis=1)
+    return tr.ewm(alpha=1 / period, min_periods=period, adjust=False).mean()
+
+
+def _calc_atr_stop(close: pd.Series, atr: pd.Series, multiplier: float = 2.0) -> pd.Series:
+    """
+    Trailing stop = max(prev_stop, close - multiplier*ATR).
+    Stop only moves up — lets winners ride while cutting losses.
+    """
+    stop = pd.Series(float("nan"), index=close.index)
+    for i in range(len(close)):
+        if pd.isna(atr.iloc[i]):
+            continue
+        candidate = float(close.iloc[i]) - multiplier * float(atr.iloc[i])
+        if pd.isna(stop.iloc[i - 1]) if i > 0 else True:
+            stop.iloc[i] = candidate
+        else:
+            stop.iloc[i] = max(float(stop.iloc[i - 1]), candidate)
+    return stop
+
+
+def _evaluate_atr_trailing(ticker: str, df: pd.DataFrame) -> Optional[Signal]:
+    """
+    ATR Trailing Stop strategy:
+      BUY  — price crosses above SMA20 today.
+      STOP — price closes below the ATR trailing stop today.
+    """
+    df = df.dropna(subset=["Close", "High", "Low"])
+    if len(df) < 25:
+        return None
+
+    df["sma20"] = df["Close"].rolling(20).mean()
+    atr         = _calc_atr(df)
+    df["atr"]   = atr
+    df["stop"]  = _calc_atr_stop(df["Close"], atr)
+
+    if df["sma20"].isna().iloc[-1] or df["stop"].isna().iloc[-1]:
+        return None
+
+    close      = float(df["Close"].iloc[-1])
+    close_prev = float(df["Close"].iloc[-2])
+    sma20      = float(df["sma20"].iloc[-1])
+    sma20_prev = float(df["sma20"].iloc[-2])
+    stop       = float(df["stop"].iloc[-1])
+    atr_val    = float(df["atr"].iloc[-1])
+    pct_from_stop = (close - stop) / close * 100
+
+    # BUY: price crosses above SMA20 today
+    if close_prev <= sma20_prev and close > sma20:
+        earnings_flag = _has_earnings_soon(ticker)
+        analyst_rec   = _get_analyst_rec(ticker)
+        return {
+            "signal_type":    "atr_buy",
+            "ticker":         ticker,
+            "close":          round(close, 2),
+            "sma20":          round(sma20, 2),
+            "atr":            round(atr_val, 2),
+            "atr_stop":       round(stop, 2),
+            "pct_from_stop":  round(pct_from_stop, 2),
+            "earnings_flag":  earnings_flag,
+            "analyst_rec":    analyst_rec,
+        }
+
+    # STOP HIT: price closes below trailing stop
+    if close < stop:
+        earnings_flag = _has_earnings_soon(ticker)
+        analyst_rec   = _get_analyst_rec(ticker)
+        return {
+            "signal_type":    "atr_stop",
+            "ticker":         ticker,
+            "close":          round(close, 2),
+            "sma20":          round(sma20, 2),
+            "atr":            round(atr_val, 2),
+            "atr_stop":       round(stop, 2),
+            "pct_from_stop":  round(pct_from_stop, 2),
+            "earnings_flag":  earnings_flag,
+            "analyst_rec":    analyst_rec,
+        }
+
+    return None
 
 
 def _calc_rsi(close: pd.Series, period: int) -> float:

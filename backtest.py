@@ -17,12 +17,12 @@ import pandas as pd
 import yfinance as yf
 
 import config
-from screener import _extract_ticker, _calc_rsi
+from screener import _extract_ticker, _calc_rsi, _calc_atr, _calc_atr_stop
 
 log = logging.getLogger(__name__)
 
 HOLD_DAYS    = [5, 10, 20]
-SIGNAL_TYPES = ["bounce", "golden_cross", "death_cross", "rsi_oversold", "rsi_overbought", "sma_alignment", "high_pullback"]
+SIGNAL_TYPES = ["bounce", "golden_cross", "death_cross", "rsi_oversold", "rsi_overbought", "sma_alignment", "high_pullback", "atr_buy", "atr_stop"]
 DEDUP_DAYS   = 20   # suppress repeat signal on same ticker for this many bars
 
 
@@ -63,8 +63,11 @@ def _scan_ticker(df: pd.DataFrame, ticker: str, all_trades: Dict[str, List[dict]
     df["sma150"] = close.rolling(150).mean()
     df["sma50"]  = close.rolling(50).mean()
     df["sma200"] = close.rolling(200).mean()
+    df["sma20"]  = close.rolling(20).mean()
     df["rsi"]    = _calc_rsi_series(close, config.RSI_PERIOD)
     df["vol20"]  = df["Volume"].rolling(20).mean()
+    df["atr"]    = _calc_atr(df)
+    df["atr_stop"] = _calc_atr_stop(close, df["atr"])
 
     last_fired: Dict[str, int] = {}  # signal_type → last bar index
 
@@ -88,6 +91,10 @@ def _scan_ticker(df: pd.DataFrame, ticker: str, all_trades: Dict[str, List[dict]
                 fired = _check_sma_alignment(df, i)
             elif signal_type == "high_pullback":
                 fired = _check_high_pullback(df, i)
+            elif signal_type == "atr_buy":
+                fired = _check_atr_buy(df, i)
+            elif signal_type == "atr_stop":
+                fired = _check_atr_stop_hit(df, i)
 
             if not fired:
                 continue
@@ -154,6 +161,25 @@ def _check_high_pullback(df: pd.DataFrame, i: int) -> bool:
         return False
     pct_below = (high52 - close) / high52 * 100
     return pct_below >= 20 and close > open_
+
+
+def _check_atr_buy(df: pd.DataFrame, i: int) -> bool:
+    if i < 1:
+        return False
+    sma20_cur  = df["sma20"].iloc[i]
+    sma20_prev = df["sma20"].iloc[i - 1]
+    close_cur  = df["Close"].iloc[i]
+    close_prev = df["Close"].iloc[i - 1]
+    if pd.isna(sma20_cur) or pd.isna(sma20_prev):
+        return False
+    return close_prev <= sma20_prev and close_cur > sma20_cur
+
+
+def _check_atr_stop_hit(df: pd.DataFrame, i: int) -> bool:
+    stop = df["atr_stop"].iloc[i]
+    if pd.isna(stop):
+        return False
+    return float(df["Close"].iloc[i]) < float(stop)
 
 
 def _check_rsi(df: pd.DataFrame, i: int, direction: str) -> bool:

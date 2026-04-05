@@ -23,6 +23,8 @@ import pandas as pd
 import requests
 import yfinance as yf
 
+from screener import _calc_atr, _calc_atr_stop
+
 log = logging.getLogger(__name__)
 
 STOP_BELOW_SMA = 0.02  # stop placed 2% below SMA150
@@ -223,15 +225,25 @@ def enrich_positions() -> List[Position]:
             pct_chg    = (current - pos["buy_price"]) / pos["buy_price"] * 100
             dollar_chg = (current - pos["buy_price"]) * pos["quantity"]
 
+            atr_series  = _calc_atr(df)
+            atr_stop_s  = _calc_atr_stop(df["Close"], atr_series)
+            atr_val     = round(float(atr_series.iloc[-1]), 2)
+            atr_stop    = round(float(atr_stop_s.iloc[-1]), 2)
+            pct_from_atr_stop = round((current - atr_stop) / current * 100, 2)
+
             enriched.append({
                 **pos,
-                "current":        round(current, 2),
-                "pct_change":     round(pct_chg, 2),
-                "dollar_change":  round(dollar_chg, 2),
-                "sma150":         round(sma150, 2),
-                "sma150_rising":  sma150 > sma_5ago,
-                "stop":           round(stop, 2),
-                "stop_hit":       current < stop,
+                "current":           round(current, 2),
+                "pct_change":        round(pct_chg, 2),
+                "dollar_change":     round(dollar_chg, 2),
+                "sma150":            round(sma150, 2),
+                "sma150_rising":     sma150 > sma_5ago,
+                "stop":              round(stop, 2),
+                "stop_hit":          current < stop,
+                "atr":               atr_val,
+                "atr_stop":          atr_stop,
+                "atr_stop_hit":      current < atr_stop,
+                "pct_from_atr_stop": pct_from_atr_stop,
             })
         except Exception as exc:
             log.warning("Could not enrich %s: %s", pos["ticker"], exc)

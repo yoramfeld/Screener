@@ -74,6 +74,24 @@ def _format_signal(sig: Signal) -> str:
             f"{analyst_line}"
             f"{chart}"
         )
+    if sig["signal_type"] == "atr_buy":
+        return (
+            f"🟩 *{sig['ticker']}* — ATR Trailing Stop: BUY\n"
+            f"  Price: ${sig['close']}  crossed above SMA20: ${sig['sma20']}\n"
+            f"  ATR: ${sig['atr']}  |  Stop: ${sig['atr_stop']} ({sig['pct_from_stop']:.1f}% below)\n"
+            f"{earnings_line}"
+            f"{analyst_line}"
+            f"{chart}"
+        )
+    if sig["signal_type"] == "atr_stop":
+        return (
+            f"🟥 *{sig['ticker']}* — ATR Trailing Stop: EXIT\n"
+            f"  Price: ${sig['close']}  below stop: ${sig['atr_stop']}\n"
+            f"  ATR: ${sig['atr']}  |  SMA20: ${sig['sma20']}\n"
+            f"{earnings_line}"
+            f"{analyst_line}"
+            f"{chart}"
+        )
     if sig["signal_type"] == "sma_alignment":
         return (
             f"🔼 *{sig['ticker']}* — Bullish SMA Alignment\n"
@@ -216,12 +234,18 @@ def send_portfolio(positions: List[Position]) -> None:
         stop_pnl   = (p["stop"] - p["buy_price"]) / p["buy_price"] * 100
         stop_sign  = "+" if stop_pnl >= 0 else ""
         warning    = "  ⚠️ STOP HIT" if p["stop_hit"] else ""
-        sma_arrow = "↑" if p.get("sma150_rising") else "↓"
+        sma_arrow    = "↑" if p.get("sma150_rising") else "↓"
+        atr_stop     = p.get("atr_stop")
+        atr_line     = (
+            f"\n  ATR Stop: ${atr_stop} ({p.get('pct_from_atr_stop', 0):+.1f}%)"
+            f"{'  ⚠️ ATR STOP HIT' if p.get('atr_stop_hit') else ''}"
+        ) if atr_stop else ""
         lines.append(
             f"{arrow} *{p['ticker']}* — entry ${p['buy_price']}  ({p['buy_date']})\n"
             f"  Now: ${p['current']} ({sign}{p['pct_change']}%)  "
             f"|  SMA150: ${p['sma150']}{sma_arrow}  "
             f"|  Stop: ${p['stop']} ({stop_sign}{stop_pnl:.1f}%){warning}"
+            f"{atr_line}"
         )
 
     _post("📋 *Portfolio — Stop Levels*\n\n" + "\n\n".join(lines))
@@ -261,6 +285,8 @@ def send_backtest(stats: dict, years: int = 3) -> None:
         "rsi_overbought":("🔴", "RSI Overbought"),
         "sma_alignment": ("🔼", "Bullish SMA Alignment"),
         "high_pullback": ("🎯", "52-Week High Pullback"),
+        "atr_buy":       ("🟩", "ATR Trailing Stop — Buy"),
+        "atr_stop":      ("🟥", "ATR Trailing Stop — Exit"),
     }
 
     lines = []
