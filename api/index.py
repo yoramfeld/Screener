@@ -89,10 +89,12 @@ _TELEGRAM_URL = "https://api.telegram.org/bot{token}/sendMessage"
 
 _ET = ZoneInfo("America/New_York")
 
-# NYSE holidays 2026
-_HOLIDAYS_2026 = {
+# NYSE holidays 2026-2027
+_HOLIDAYS = {
     "2026-01-01", "2026-01-19", "2026-02-16", "2026-04-03",
     "2026-05-25", "2026-07-03", "2026-09-07", "2026-11-26", "2026-12-25",
+    "2027-01-01", "2027-01-18", "2027-02-15", "2027-03-26",
+    "2027-05-31", "2027-07-05", "2027-09-06", "2027-11-25", "2027-12-24",
 }
 
 
@@ -152,7 +154,7 @@ def _market_status() -> str:
     date_str = now.strftime("%Y-%m-%d")
     if now.weekday() >= 5:
         return "🔴 Market is *CLOSED* (weekend)"
-    if date_str in _HOLIDAYS_2026:
+    if date_str in _HOLIDAYS:
         return "🔴 Market is *CLOSED* (holiday)"
     t = now.time()
     if t < time(9, 30):
