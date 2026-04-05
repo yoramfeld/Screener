@@ -159,6 +159,14 @@ def stream_signals(tickers: List[str]) -> Generator[Signal, None, None]:
             if rsi:
                 yield rsi
 
+            alignment = _evaluate_sma_alignment(ticker, df)
+            if alignment:
+                yield alignment
+
+            pullback = _evaluate_high_pullback(ticker, df)
+            if pullback:
+                yield pullback
+
         except Exception as exc:
             log.debug("Error processing %s: %s", ticker, exc)
 
@@ -358,6 +366,64 @@ def _evaluate_rsi(ticker: str, df: pd.DataFrame) -> Optional[Signal]:
         "rsi":         round(rsi, 1),
         "earnings_flag": earnings_flag,
         "analyst_rec": analyst_rec,
+    }
+
+
+def _evaluate_sma_alignment(ticker: str, df: pd.DataFrame) -> Optional[Signal]:
+    """Bullish SMA alignment: SMA50 > SMA150 > SMA200 (Stage 2 uptrend)."""
+    df = df.dropna(subset=["Close"])
+    df["sma50"]  = df["Close"].rolling(50).mean()
+    df["sma150"] = df["Close"].rolling(150).mean()
+    df["sma200"] = df["Close"].rolling(200).mean()
+
+    sma50  = float(df["sma50"].iloc[-1])
+    sma150 = float(df["sma150"].iloc[-1])
+    sma200 = float(df["sma200"].iloc[-1])
+
+    if pd.isna(sma50) or pd.isna(sma150) or pd.isna(sma200):
+        return None
+    if not (sma50 > sma150 > sma200):
+        return None
+
+    close = float(df["Close"].iloc[-1])
+    earnings_flag = _has_earnings_soon(ticker)
+    analyst_rec   = _get_analyst_rec(ticker)
+    return {
+        "signal_type":  "sma_alignment",
+        "ticker":       ticker,
+        "close":        round(close, 2),
+        "sma50":        round(sma50, 2),
+        "sma150":       round(sma150, 2),
+        "sma200":       round(sma200, 2),
+        "earnings_flag": earnings_flag,
+        "analyst_rec":  analyst_rec,
+    }
+
+
+def _evaluate_high_pullback(ticker: str, df: pd.DataFrame) -> Optional[Signal]:
+    """20%+ below 52-week high with a positive close today (beaten-down bounce)."""
+    df = df.dropna(subset=["Close", "Open"])
+
+    close  = float(df["Close"].iloc[-1])
+    open_  = float(df["Open"].iloc[-1])
+    high52 = float(df["High"].iloc[-252:].max()) if len(df) >= 252 else float(df["High"].max())
+
+    pct_below = (high52 - close) / high52 * 100
+    if pct_below < 20:
+        return None
+    if close <= open_:   # must close up on the day
+        return None
+
+    earnings_flag = _has_earnings_soon(ticker)
+    analyst_rec   = _get_analyst_rec(ticker)
+    return {
+        "signal_type":  "high_pullback",
+        "ticker":       ticker,
+        "close":        round(close, 2),
+        "high52":       round(high52, 2),
+        "pct_below":    round(pct_below, 2),
+        "earnings_flag": earnings_flag,
+        "analyst_rec":  analyst_rec,
     }
 
 

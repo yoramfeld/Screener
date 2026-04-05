@@ -22,7 +22,7 @@ from screener import _extract_ticker, _calc_rsi
 log = logging.getLogger(__name__)
 
 HOLD_DAYS    = [5, 10, 20]
-SIGNAL_TYPES = ["bounce", "golden_cross", "death_cross", "rsi_oversold", "rsi_overbought"]
+SIGNAL_TYPES = ["bounce", "golden_cross", "death_cross", "rsi_oversold", "rsi_overbought", "sma_alignment", "high_pullback"]
 DEDUP_DAYS   = 20   # suppress repeat signal on same ticker for this many bars
 
 
@@ -84,6 +84,10 @@ def _scan_ticker(df: pd.DataFrame, ticker: str, all_trades: Dict[str, List[dict]
                 fired = _check_rsi(df, i, "oversold")
             elif signal_type == "rsi_overbought":
                 fired = _check_rsi(df, i, "overbought")
+            elif signal_type == "sma_alignment":
+                fired = _check_sma_alignment(df, i)
+            elif signal_type == "high_pullback":
+                fired = _check_high_pullback(df, i)
 
             if not fired:
                 continue
@@ -130,6 +134,26 @@ def _check_cross(df: pd.DataFrame, i: int, signal_type: str) -> bool:
         return sma50_prv <= sma200_prv and sma50_cur > sma200_cur
     else:
         return sma50_prv >= sma200_prv and sma50_cur < sma200_cur
+
+
+def _check_sma_alignment(df: pd.DataFrame, i: int) -> bool:
+    sma50  = df["sma50"].iloc[i]
+    sma150 = df["sma150"].iloc[i]
+    sma200 = df["sma200"].iloc[i]
+    if pd.isna(sma50) or pd.isna(sma150) or pd.isna(sma200):
+        return False
+    return sma50 > sma150 > sma200
+
+
+def _check_high_pullback(df: pd.DataFrame, i: int) -> bool:
+    close  = df["Close"].iloc[i]
+    open_  = df["Open"].iloc[i]
+    start  = max(0, i - 252)
+    high52 = df["High"].iloc[start:i + 1].max()
+    if pd.isna(high52) or high52 == 0:
+        return False
+    pct_below = (high52 - close) / high52 * 100
+    return pct_below >= 20 and close > open_
 
 
 def _check_rsi(df: pd.DataFrame, i: int, direction: str) -> bool:

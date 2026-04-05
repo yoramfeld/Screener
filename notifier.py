@@ -74,6 +74,22 @@ def _format_signal(sig: Signal) -> str:
             f"{analyst_line}"
             f"{chart}"
         )
+    if sig["signal_type"] == "sma_alignment":
+        return (
+            f"🔼 *{sig['ticker']}* — Bullish SMA Alignment\n"
+            f"  Price: ${sig['close']}  |  SMA50: ${sig['sma50']}  >  SMA150: ${sig['sma150']}  >  SMA200: ${sig['sma200']}\n"
+            f"{earnings_line}"
+            f"{analyst_line}"
+            f"{chart}"
+        )
+    if sig["signal_type"] == "high_pullback":
+        return (
+            f"🎯 *{sig['ticker']}* — {sig['pct_below']}% Below 52-Week High\n"
+            f"  Price: ${sig['close']}  |  52w High: ${sig['high52']}  |  Positive close today\n"
+            f"{earnings_line}"
+            f"{analyst_line}"
+            f"{chart}"
+        )
     # bounce
     return (
         f"📈 *{sig['ticker']}* — SMA150 Bounce\n"
@@ -243,6 +259,8 @@ def send_backtest(stats: dict, years: int = 3) -> None:
         "death_cross":   ("💀", "Death Cross"),
         "rsi_oversold":  ("📉", "RSI Oversold"),
         "rsi_overbought":("🔴", "RSI Overbought"),
+        "sma_alignment": ("🔼", "Bullish SMA Alignment"),
+        "high_pullback": ("🎯", "52-Week High Pullback"),
     }
 
     lines = []
