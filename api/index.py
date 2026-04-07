@@ -279,11 +279,18 @@ def webhook():
 
     # ------------------------------------------------------------------ /s (record stop orders)
     elif cmd == "/s":
-        # Usage: /s AMD 100 AAPL 120 IBM 130
-        if len(parts) < 3 or len(parts) % 2 == 0:
+        # Usage: /s AMD 100 AAPL 120 IBM 130  — or /s alone to list current stops
+        import portfolio
+        if len(parts) == 1:
+            orders = portfolio.get_stop_orders()
+            if not orders:
+                _send_message("No stop orders recorded yet. Use `/s AMD 100 AAPL 120`")
+            else:
+                lines = [f"  *{t}*: ${p}" for t, p in sorted(orders.items())]
+                _send_message("📌 *Filed stop orders:*\n" + "\n".join(lines))
+        elif len(parts) < 3 or len(parts) % 2 == 0:
             _send_message("Usage: `/s AMD 100 AAPL 120 IBM 130`")
         else:
-            import portfolio
             try:
                 updates = {}
                 it = iter(parts[1:])
