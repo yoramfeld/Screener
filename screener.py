@@ -731,6 +731,37 @@ def scan_earnings_week(tickers: List[str]) -> List[dict]:
     return results
 
 
+def scan_top_recommendations(tickers: List[str], top_n: int = 10, min_analysts: int = 5) -> List[dict]:
+    """Return the top_n S&P 500 stocks by analyst buy consensus.
+
+    Score = buy / (buy + hold + sell).  Only tickers with >= min_analysts
+    total ratings are considered, to filter out noise from thin coverage.
+    Results are sorted by score descending, then by raw buy count descending.
+    """
+    results = []
+    for ticker in tickers:
+        rec = _get_analyst_rec(ticker)
+        if not rec:
+            continue
+        b, h, s = rec.get("buy", 0), rec.get("hold", 0), rec.get("sell", 0)
+        total = b + h + s
+        if total < min_analysts:
+            continue
+        score = b / total
+        results.append({
+            "ticker":  ticker,
+            "buy":     b,
+            "hold":    h,
+            "sell":    s,
+            "total":   total,
+            "score":   round(score * 100, 1),   # % buy
+            "target":  rec.get("target"),
+        })
+
+    results.sort(key=lambda x: (x["score"], x["buy"]), reverse=True)
+    return results[:top_n]
+
+
 def _evaluate_bounce(ticker: str, df: pd.DataFrame) -> Optional[Signal]:
     """Apply all filters to a single ticker's DataFrame. Return Signal or None."""
     df = df.dropna(subset=["Close", "Open", "Low", "Volume"])

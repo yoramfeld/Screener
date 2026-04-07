@@ -360,6 +360,26 @@ def send_above(matches: list) -> None:
     _post(header + "\n".join(lines))
 
 
+def send_top_recommendations(results: list) -> None:
+    """Send top S&P 500 stocks by analyst buy consensus."""
+    from datetime import datetime, timezone
+    now = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+    if not results:
+        _post(f"📊 *Analyst Top Picks* — {now}\nNo results found.")
+        return
+
+    lines = []
+    for i, r in enumerate(results, 1):
+        target_str = f"  |  target ${r['target']:,.0f}" if r.get("target") else ""
+        lines.append(
+            f"{i}. *{r['ticker']}* — {r['score']}% buy  "
+            f"(B{r['buy']}/H{r['hold']}/S{r['sell']}){target_str}"
+        )
+
+    _post(f"📊 *Analyst Top Picks* — {now}\n\n" + "\n".join(lines))
+
+
 def send_earnings_week(matches: list) -> None:
     """Send Sunday earnings calendar — tickers with earnings in the next 7 days."""
     from datetime import datetime, timezone
