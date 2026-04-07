@@ -277,6 +277,24 @@ def webhook():
                         f"{remain_line}"
                     )
 
+    # ------------------------------------------------------------------ /s (record stop orders)
+    elif cmd == "/s":
+        # Usage: /s AMD 100 AAPL 120 IBM 130
+        if len(parts) < 3 or len(parts) % 2 == 0:
+            _send_message("Usage: `/s AMD 100 AAPL 120 IBM 130`")
+        else:
+            import portfolio
+            try:
+                updates = {}
+                it = iter(parts[1:])
+                for ticker, price in zip(it, it):
+                    updates[ticker.upper()] = float(price)
+                orders = portfolio.set_stop_orders(updates)
+                lines  = [f"  *{t}*: ${p}" for t, p in sorted(orders.items())]
+                _send_message("✅ Stop orders updated:\n" + "\n".join(lines))
+            except ValueError:
+                _send_message("❌ Invalid format. Usage: `/s AMD 100 AAPL 120`")
+
     # ------------------------------------------------------------------ /delete
     elif cmd == "/delete":
         if len(parts) < 2:
@@ -332,6 +350,7 @@ def webhook():
             "`/buy AAPL 182.40 50` — record a buy\n"
             "`/sell AAPL 185.20` — sell all shares\n"
             "`/sell AAPL 185.20 30` — partial sell\n"
+            "`/s AMD 100 AAPL 120` — record your filed stop orders\n"
             "`/delete AAPL` — remove a position\n"
             "`/purge AAPL` — remove from positions and P&L history\n"
             "`/pnl` — closed trades & total profit\n\n"

@@ -301,9 +301,8 @@ def send_portfolio(positions: List[Position]) -> None:
         _post("📋 *Portfolio* — no open positions.")
         return
 
-    snapshot   = pf.get_stop_snapshot()
-    new_snap   = {}
-    lines      = []
+    stop_orders = pf.get_stop_orders()
+    lines       = []
 
     for p in sorted(positions, key=lambda x: x["pct_change"], reverse=True):
         ticker    = p["ticker"]
@@ -311,16 +310,16 @@ def send_portfolio(positions: List[Position]) -> None:
         sign      = "+" if p["pct_change"] >= 0 else ""
         sma_arrow = "↑" if p.get("sma150_rising") else "↓"
         stop      = p["stop"]
-        new_snap[ticker] = stop
 
-        # Stop-change alert vs last snapshot
-        prev_stop  = snapshot.get(ticker)
+        # Alert if recommended stop is >=1% above the user's filed stop order
+        filed     = stop_orders.get(ticker)
         stop_alert = ""
-        if prev_stop and prev_stop > 0:
-            chg = (stop - prev_stop) / prev_stop * 100
-            if abs(chg) >= 1:
-                chg_sign = "+" if chg >= 0 else ""
-                stop_alert = f" ⚡ moved {chg_sign}{chg:.1f}%"
+        if filed and filed > 0:
+            gap = (stop - filed) / filed * 100
+            if gap >= 1:
+                stop_alert = f" ⚡ update to ${stop} (filed: ${filed})"
+        elif not filed:
+            stop_alert = " (no order filed — use /s to record)"
 
         hit = "  ⚠️ STOP HIT" if p["stop_hit"] else ""
         lines.append(
@@ -328,8 +327,6 @@ def send_portfolio(positions: List[Position]) -> None:
             f"SMA150: ${p['sma150']}{sma_arrow}\n"
             f"Stop: ${stop}{stop_alert}{hit}"
         )
-
-    pf.save_stop_snapshot(new_snap)
 
     total_value  = sum(p["current"] * p["quantity"] for p in positions)
     total_cost   = sum(p["buy_price"] * p["quantity"] for p in positions)

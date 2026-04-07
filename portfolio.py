@@ -185,14 +185,17 @@ def close_position(ticker: str, sell_price: float, quantity: Optional[float] = N
     return trade
 
 
-def get_stop_snapshot() -> dict:
-    """Return {ticker: stop} from the last /p run."""
-    return _kv_get("stops_snapshot") or {}
+def get_stop_orders() -> dict:
+    """Return {ticker: price} — the user's actual filed stop-limit orders."""
+    return _kv_get("stop_orders") or {}
 
 
-def save_stop_snapshot(stops: dict) -> None:
-    """Persist {ticker: stop} so the next /p run can detect changes."""
-    _kv_set("stops_snapshot", stops)
+def set_stop_orders(updates: dict) -> dict:
+    """Merge updates into the stored stop orders and return the full dict."""
+    orders = get_stop_orders()
+    orders.update({t.upper(): p for t, p in updates.items()})
+    _kv_set("stop_orders", orders)
+    return orders
 
 
 def get_trades() -> List[Trade]:
