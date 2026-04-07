@@ -103,9 +103,22 @@ def run_pnl() -> None:
     notifier.send_pnl(trades)
 
 
+def run_earnings() -> None:
+    tickers = universe.get_universe()
+    matches = screener.scan_earnings_week(tickers)
+    notifier.send_earnings_week(matches)
+
+
 if __name__ == "__main__":
     run_type = os.environ.get("RUN_TYPE", "screen")
-    dispatch = {"screen": run_screen, "portfolio": run_portfolio, "pnl": run_pnl, "above": run_above, "backtest": run_backtest}
+    dispatch = {
+        "screen":    run_screen,
+        "portfolio": run_portfolio,
+        "pnl":       run_pnl,
+        "above":     run_above,
+        "backtest":  run_backtest,
+        "earnings":  run_earnings,
+    }
     fn = dispatch.get(run_type, run_screen)
     try:
         fn()

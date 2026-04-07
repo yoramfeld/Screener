@@ -62,31 +62,61 @@ def market_is_healthy() -> bool:
 # Earnings guard
 # ---------------------------------------------------------------------------
 
-def _has_earnings_soon(ticker: str) -> bool:
-    """Return True if earnings are scheduled within the next 48 hours."""
+def _get_earnings_info(ticker: str, cache: Optional[dict] = None) -> dict:
+    """Return {"days_away": int|None, "date_str": str|None} for nearest earnings.
+
+    days_away > 0  — earnings are N calendar days in the future
+    days_away <= 0 — earnings were N calendar days ago (or today)
+    None           — no earnings data found
+
+    Pass cache={} to share results across calls within the same scan run.
+    """
+    if cache is not None and ticker in cache:
+        return cache[ticker]
+
+    result: dict = {"days_away": None, "date_str": None}
     try:
         info = yf.Ticker(ticker).calendar
-        if info is None or info.empty:
-            return False
-        # calendar index contains 'Earnings Date' as a column or row
-        if "Earnings Date" in info.columns:
-            dates = info["Earnings Date"].dropna()
-        elif "Earnings Date" in info.index:
-            dates = pd.Series([info.loc["Earnings Date"]])
-        else:
-            return False
-        now = datetime.now(tz=timezone.utc)
-        cutoff = now + timedelta(hours=48)
-        for d in dates:
-            try:
-                d_aware = pd.Timestamp(d).tz_localize("UTC") if pd.Timestamp(d).tzinfo is None else pd.Timestamp(d).tz_convert("UTC")
-                if now <= d_aware <= cutoff:
-                    return True
-            except Exception:
-                continue
-        return False
+        if info is not None and not info.empty:
+            if "Earnings Date" in info.columns:
+                dates = info["Earnings Date"].dropna()
+            elif "Earnings Date" in info.index:
+                dates = pd.Series([info.loc["Earnings Date"]])
+            else:
+                dates = pd.Series([])
+
+            now = datetime.now(tz=timezone.utc)
+            closest_days: Optional[int] = None
+            closest_ts = None
+            for d in dates:
+                try:
+                    ts = pd.Timestamp(d)
+                    ts = ts.tz_localize("UTC") if ts.tzinfo is None else ts.tz_convert("UTC")
+                    days = (ts - now).days
+                    if closest_days is None or abs(days) < abs(closest_days):
+                        closest_days = days
+                        closest_ts   = ts
+                except Exception:
+                    continue
+
+            if closest_ts is not None:
+                result = {
+                    "days_away": closest_days,
+                    "date_str":  closest_ts.strftime("%b %d"),
+                }
     except Exception:
-        return False
+        pass
+
+    if cache is not None:
+        cache[ticker] = result
+    return result
+
+
+def _has_earnings_soon(ticker: str) -> bool:
+    """Return True if earnings are scheduled within the next 48 hours."""
+    info = _get_earnings_info(ticker)
+    days = info.get("days_away")
+    return days is not None and 0 <= days <= 2
 
 
 # ---------------------------------------------------------------------------
@@ -140,6 +170,8 @@ def stream_signals(tickers: List[str]) -> Generator[Signal, None, None]:
         threads=True,
     )
 
+    earnings_cache: dict = {}  # shared across tickers for the channel scanner
+
     for ticker in tickers:
         try:
             df = _extract_ticker(raw, ticker, len(tickers))
@@ -170,6 +202,10 @@ def stream_signals(tickers: List[str]) -> Generator[Signal, None, None]:
             atr = _evaluate_atr_trailing(ticker, df)
             if atr:
                 yield atr
+
+            channel = _evaluate_channel(ticker, df, earnings_cache)
+            if channel:
+                yield channel
 
         except Exception as exc:
             log.debug("Error processing %s: %s", ticker, exc)
@@ -422,6 +458,54 @@ def _evaluate_atr_trailing(ticker: str, df: pd.DataFrame) -> Optional[Signal]:
     return None
 
 
+def _calc_rsi_series(close: pd.Series, period: int) -> pd.Series:
+    """Wilder's RSI as a full Series — needed for crossover detection."""
+    delta    = close.diff()
+    gain     = delta.clip(lower=0)
+    loss     = -delta.clip(upper=0)
+    avg_gain = gain.ewm(alpha=1 / period, min_periods=period, adjust=False).mean()
+    avg_loss = loss.ewm(alpha=1 / period, min_periods=period, adjust=False).mean()
+    rs       = avg_gain / avg_loss
+    return 100 - (100 / (1 + rs))
+
+
+def _calc_adx(df: pd.DataFrame, period: int = 14) -> pd.Series:
+    """Average Directional Index (ADX) — measures trend strength (not direction).
+    ADX < 25 indicates a ranging / channel market; > 25 indicates a trend.
+    """
+    high  = df["High"]
+    low   = df["Low"]
+    close = df["Close"]
+
+    prev_high  = high.shift(1)
+    prev_low   = low.shift(1)
+    prev_close = close.shift(1)
+
+    tr = pd.concat([
+        high - low,
+        (high - prev_close).abs(),
+        (low  - prev_close).abs(),
+    ], axis=1).max(axis=1)
+
+    up   = high - prev_high
+    down = prev_low - low
+
+    plus_dm  = pd.Series(0.0, index=df.index)
+    minus_dm = pd.Series(0.0, index=df.index)
+    plus_dm[  (up > down) & (up > 0)]   = up[  (up > down) & (up > 0)]
+    minus_dm[(down > up)  & (down > 0)] = down[(down > up)  & (down > 0)]
+
+    alpha = 1 / period
+    s_tr  = tr.ewm(      alpha=alpha, min_periods=period, adjust=False).mean()
+    s_pdm = plus_dm.ewm( alpha=alpha, min_periods=period, adjust=False).mean()
+    s_ndm = minus_dm.ewm(alpha=alpha, min_periods=period, adjust=False).mean()
+
+    plus_di  = 100 * s_pdm / s_tr
+    minus_di = 100 * s_ndm / s_tr
+    dx       = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di)
+    return dx.ewm(alpha=alpha, min_periods=period, adjust=False).mean()
+
+
 def _calc_rsi(close: pd.Series, period: int) -> float:
     """Wilder's RSI using exponential smoothing (alpha = 1/period)."""
     delta = close.diff()
@@ -518,6 +602,133 @@ def _evaluate_high_pullback(ticker: str, df: pd.DataFrame) -> Optional[Signal]:
         "earnings_flag": earnings_flag,
         "analyst_rec":  analyst_rec,
     }
+
+
+def _evaluate_channel(ticker: str, df: pd.DataFrame, earnings_cache: Optional[dict] = None) -> Optional[Signal]:
+    """
+    Swing Channel Scanner.
+
+    A stock qualifies as a channel stock if ALL of:
+      - 20-day H/L ratio between 1.08 and 1.20 (meaningful but bounded range)
+      - ADX(14) < 25 (no strong directional trend)
+      - RSI(14) has oscillated between 35 and 65 over the last 20 bars
+
+    BUY signal (all required):
+      - Close within 3% above 20-day low (near channel floor)
+      - RSI crossed above 35 today (was < 35 yesterday)
+      - Volume > 1.5× 20-day average
+
+    SELL signal (either condition):
+      - Close within 3% below 20-day high (near channel ceiling)
+      - RSI crossed below 65 today (was > 65 yesterday)
+
+    Earnings blackout: signal suppressed within 5 days before / 3 days after earnings.
+    Earnings warning:  flag shown if earnings are 6–10 days away.
+    """
+    df = df.dropna(subset=["Close", "High", "Low", "Volume"])
+    if len(df) < 30:
+        return None
+
+    rsi_s = _calc_rsi_series(df["Close"], config.RSI_PERIOD)
+    adx_s = _calc_adx(df)
+
+    if rsi_s.isna().iloc[-1] or adx_s.isna().iloc[-1]:
+        return None
+
+    close    = float(df["Close"].iloc[-1])
+    high20   = float(df["High"].iloc[-20:].max())
+    low20    = float(df["Low"].iloc[-20:].min())
+    rsi_cur  = float(rsi_s.iloc[-1])
+    rsi_prev = float(rsi_s.iloc[-2])
+    adx      = float(adx_s.iloc[-1])
+
+    # --- Channel detection ---
+    hl_ratio = high20 / low20 if low20 > 0 else 0
+    if not (1.08 <= hl_ratio <= 1.20):
+        return None
+    if adx >= 25:
+        return None
+    rsi_20 = rsi_s.iloc[-20:]
+    if rsi_20.max() < 35 or rsi_20.min() > 65:
+        return None  # RSI not oscillating through channel range
+
+    # --- Earnings blackout ---
+    e_info   = _get_earnings_info(ticker, earnings_cache)
+    days_out = e_info.get("days_away")
+    if days_out is not None and -3 <= days_out <= 5:
+        return None  # blackout window
+
+    earnings_flag = days_out is not None and 5 < days_out <= 10  # warning: 6–10 days away
+
+    avg_vol   = float(df["Volume"].iloc[-21:-1].mean())
+    vol_ratio = float(df["Volume"].iloc[-1]) / avg_vol if avg_vol > 0 else 0
+
+    pct_from_low  = (close - low20) / low20 * 100
+    pct_from_high = (high20 - close) / high20 * 100
+    hard_stop     = round(low20 * (1 - 0.025), 2)
+
+    # --- BUY ---
+    if pct_from_low <= 3 and rsi_prev < 35 and rsi_cur >= 35 and vol_ratio >= 1.5:
+        analyst_rec = _get_analyst_rec(ticker)
+        return {
+            "signal_type":   "channel_buy",
+            "ticker":        ticker,
+            "close":         round(close, 2),
+            "channel_low":   round(low20, 2),
+            "channel_high":  round(high20, 2),
+            "rsi":           round(rsi_cur, 1),
+            "adx":           round(adx, 1),
+            "pct_from_low":  round(pct_from_low, 2),
+            "pct_from_high": round(pct_from_high, 2),
+            "hard_stop":     hard_stop,
+            "vol_ratio":     round(vol_ratio * 100, 1),
+            "earnings_flag": earnings_flag,
+            "earnings_days": days_out,
+            "earnings_date": e_info.get("date_str", ""),
+            "analyst_rec":   analyst_rec,
+        }
+
+    # --- SELL ---
+    near_high  = pct_from_high <= 3
+    rsi_x_down = rsi_prev > 65 and rsi_cur <= 65
+    if near_high or rsi_x_down:
+        analyst_rec = _get_analyst_rec(ticker)
+        return {
+            "signal_type":   "channel_sell",
+            "ticker":        ticker,
+            "close":         round(close, 2),
+            "channel_low":   round(low20, 2),
+            "channel_high":  round(high20, 2),
+            "rsi":           round(rsi_cur, 1),
+            "adx":           round(adx, 1),
+            "pct_from_low":  round(pct_from_low, 2),
+            "pct_from_high": round(pct_from_high, 2),
+            "hard_stop":     hard_stop,
+            "reason":        "near_high" if near_high else "rsi_cross",
+            "earnings_flag": earnings_flag,
+            "earnings_days": days_out,
+            "earnings_date": e_info.get("date_str", ""),
+            "analyst_rec":   analyst_rec,
+        }
+
+    return None
+
+
+def scan_earnings_week(tickers: List[str]) -> List[dict]:
+    """Return watchlist tickers with earnings in the next 7 days, sorted by date."""
+    cache: dict = {}
+    results = []
+    for ticker in tickers:
+        info = _get_earnings_info(ticker, cache)
+        days = info.get("days_away")
+        if days is not None and 0 <= days <= 7:
+            results.append({
+                "ticker":    ticker,
+                "days_away": days,
+                "date_str":  info["date_str"],
+            })
+    results.sort(key=lambda x: x["days_away"])
+    return results
 
 
 def _evaluate_bounce(ticker: str, df: pd.DataFrame) -> Optional[Signal]:

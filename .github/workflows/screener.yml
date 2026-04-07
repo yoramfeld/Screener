@@ -2,11 +2,12 @@ name: Swing Screener
 
 on:
   schedule:
-    - cron: '30 14 * * 1-5'  # once at market open, 9:30 AM ET (14:30 UTC)
+    - cron: '30 14 * * 1-5'  # weekdays at market open, 9:30 AM ET (14:30 UTC)
+    - cron: '0 14 * * 0'     # Sunday 10 AM ET — weekly earnings preview
   workflow_dispatch:
     inputs:
       run_type:
-        description: 'screen | portfolio | pnl | above | backtest'
+        description: 'screen | portfolio | pnl | above | backtest | earnings'
         default: screen
 
 jobs:
@@ -32,11 +33,22 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Resolve run type
+        id: run_type
+        run: |
+          if [ -n "${{ github.event.inputs.run_type }}" ]; then
+            echo "value=${{ github.event.inputs.run_type }}" >> $GITHUB_OUTPUT
+          elif [ "$(date -u +%u)" = "7" ]; then
+            echo "value=earnings" >> $GITHUB_OUTPUT
+          else
+            echo "value=screen" >> $GITHUB_OUTPUT
+          fi
+
       - name: Run
         env:
           TELEGRAM_BOT_TOKEN:  ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID:    ${{ secrets.TELEGRAM_CHAT_ID }}
           KV_REST_API_URL:     ${{ secrets.KV_REST_API_URL }}
           KV_REST_API_TOKEN:   ${{ secrets.KV_REST_API_TOKEN }}
-          RUN_TYPE:            ${{ github.event.inputs.run_type || 'screen' }}
+          RUN_TYPE:            ${{ steps.run_type.outputs.value }}
         run: python run.py

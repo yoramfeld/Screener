@@ -195,6 +195,11 @@ def webhook():
                 _send_message("📶 Scanning for stocks above SMA150... one moment.")
             else:
                 _send_message("Failed to trigger. Check GITHUB_PAT in Vercel env vars.")
+        elif sub == "earnings":
+            if _trigger("earnings"):
+                _send_message("📅 Scanning earnings calendar for the next 7 days...")
+            else:
+                _send_message("Failed to trigger. Check GITHUB_PAT in Vercel env vars.")
         elif re.fullmatch(r"[A-Za-z]{1,5}", sub):
             _send_message(_check_stock(sub.upper()))
         else:
@@ -269,34 +274,10 @@ def webhook():
 
     # ------------------------------------------------------------------ /pnl
     elif cmd == "/pnl":
-        import portfolio
-        trades = portfolio.get_trades()
-        if not trades:
-            _send_message("📒 *P&L History* — no closed trades yet.")
+        if _trigger("pnl"):
+            _send_message("📒 Fetching P&L history...")
         else:
-            lines = []
-            for t in trades:
-                emoji       = "🟢" if t["pct_pnl"] >= 0 else "🔴"
-                sign        = "+" if t["pct_pnl"] >= 0 else ""
-                dollar_sign = "+" if t["dollar_pnl"] >= 0 else ""
-                qty_str     = f"{t['quantity']:g} shares  " if t.get("quantity") else ""
-                lines.append(
-                    f"{emoji} *{t['ticker']}*  {qty_str}\n"
-                    f"  Buy: ${t['buy_price']} ({t['buy_date']})  →  "
-                    f"Sell: ${t['sell_price']} ({t['sell_date']})\n"
-                    f"  Profit: {sign}{t['pct_pnl']}%  ({dollar_sign}${t['dollar_pnl']:,.2f})"
-                )
-            total_dollars = sum(t["dollar_pnl"] for t in trades)
-            total_cost    = sum(t["buy_price"] * t["quantity"] for t in trades if t.get("quantity"))
-            weighted_pct  = (total_dollars / total_cost * 100) if total_cost else 0
-            winners       = sum(1 for t in trades if t["pct_pnl"] >= 0)
-            sign          = "+" if total_dollars >= 0 else ""
-            pct_sign      = "+" if weighted_pct >= 0 else ""
-            summary = (
-                f"\n📊 *Total: {sign}${total_dollars:,.2f} ({pct_sign}{weighted_pct:.1f}%)* "
-                f"across {len(trades)} trade(s) ({winners}W / {len(trades) - winners}L)"
-            )
-            _send_message("📒 *P&L History*\n\n" + "\n\n".join(lines) + summary)
+            _send_message("Failed to trigger. Check GITHUB_PAT in Vercel env vars.")
 
     # ------------------------------------------------------------------ /market
     elif cmd == "/market":
@@ -309,6 +290,7 @@ def webhook():
             "*Screener*\n"
             "`/scan` — run screener on all stocks\n"
             "`/scan above` — top 20 stocks above rising SMA150\n"
+            "`/scan earnings` — earnings calendar for next 7 days\n"
             "`/scan AAPL` — check a specific stock\n"
             "`/scan backtest` — backtest signals on 3 years of data (~5 min)\n\n"
             "*Portfolio*\n"

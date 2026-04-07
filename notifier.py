@@ -108,6 +108,38 @@ def _format_signal(sig: Signal) -> str:
             f"{analyst_line}"
             f"{chart}"
         )
+    if sig["signal_type"] == "channel_buy":
+        days = sig.get("earnings_days")
+        e_line = (
+            f"  ⚠️ Earnings in {days}d ({sig.get('earnings_date', '')}) — avoid if short-term\n"
+            if sig.get("earnings_flag") and days else earnings_line
+        )
+        return (
+            f"🟦 *{sig['ticker']}* — Swing Channel: BUY\n"
+            f"  Price: ${sig['close']}  |  Channel: ${sig['channel_low']} – ${sig['channel_high']}\n"
+            f"  RSI: {sig['rsi']} (crossed ↑35)  |  ADX: {sig['adx']}  |  Vol: {sig['vol_ratio']}% of avg\n"
+            f"  Entry: ~${sig['close']}  |  Stop: ${sig['hard_stop']}  |  Target: ${sig['channel_high']}\n"
+            f"  {sig['pct_from_low']:.1f}% from floor  |  {sig['pct_from_high']:.1f}% from ceiling\n"
+            f"{e_line}"
+            f"{analyst_line}"
+            f"{chart}"
+        )
+    if sig["signal_type"] == "channel_sell":
+        reason = "near channel high" if sig.get("reason") == "near_high" else "RSI crossed ↓65"
+        days = sig.get("earnings_days")
+        e_line = (
+            f"  ⚠️ Earnings in {days}d ({sig.get('earnings_date', '')}) — avoid if short-term\n"
+            if sig.get("earnings_flag") and days else earnings_line
+        )
+        return (
+            f"🟫 *{sig['ticker']}* — Swing Channel: SELL ({reason})\n"
+            f"  Price: ${sig['close']}  |  Channel: ${sig['channel_low']} – ${sig['channel_high']}\n"
+            f"  RSI: {sig['rsi']}  |  ADX: {sig['adx']}\n"
+            f"  {sig['pct_from_low']:.1f}% from floor  |  {sig['pct_from_high']:.1f}% from ceiling\n"
+            f"{e_line}"
+            f"{analyst_line}"
+            f"{chart}"
+        )
     # bounce
     return (
         f"📈 *{sig['ticker']}* — SMA150 Bounce\n"
@@ -228,27 +260,31 @@ def send_portfolio(positions: List[Position]) -> None:
         return
 
     lines = []
-    for p in positions:
+    for p in sorted(positions, key=lambda x: x["pct_change"], reverse=True):
         arrow      = "🟢" if p["pct_change"] >= 0 else "🔴"
         sign       = "+" if p["pct_change"] >= 0 else ""
         stop_pnl   = (p["stop"] - p["buy_price"]) / p["buy_price"] * 100
         stop_sign  = "+" if stop_pnl >= 0 else ""
         warning    = "  ⚠️ STOP HIT" if p["stop_hit"] else ""
-        sma_arrow    = "↑" if p.get("sma150_rising") else "↓"
-        atr_stop     = p.get("atr_stop")
-        atr_line     = (
-            f"\n  ATR Stop: ${atr_stop} ({p.get('pct_from_atr_stop', 0):+.1f}%)"
-            f"{'  ⚠️ ATR STOP HIT' if p.get('atr_stop_hit') else ''}"
-        ) if atr_stop else ""
+        sma_arrow  = "↑" if p.get("sma150_rising") else "↓"
         lines.append(
             f"{arrow} *{p['ticker']}* — entry ${p['buy_price']}  ({p['buy_date']})\n"
             f"  Now: ${p['current']} ({sign}{p['pct_change']}%)  "
             f"|  SMA150: ${p['sma150']}{sma_arrow}  "
             f"|  Stop: ${p['stop']} ({stop_sign}{stop_pnl:.1f}%){warning}"
-            f"{atr_line}"
         )
 
-    _post("📋 *Portfolio — Stop Levels*\n\n" + "\n\n".join(lines))
+    total_value    = sum(p["current"] * p["quantity"] for p in positions)
+    total_cost     = sum(p["buy_price"] * p["quantity"] for p in positions)
+    total_dollar   = total_value - total_cost
+    total_pct      = (total_dollar / total_cost * 100) if total_cost else 0
+    total_sign     = "+" if total_dollar >= 0 else ""
+    summary = (
+        f"\n💼 *Total:* ${total_value:,.0f}  |  "
+        f"{total_sign}${total_dollar:,.0f} ({total_sign}{total_pct:.1f}%)"
+    )
+
+    _post("📋 *Portfolio — Stop Levels*\n\n" + "\n\n".join(lines) + summary)
 
 
 def send_above(matches: list) -> None:
@@ -270,6 +306,28 @@ def send_above(matches: list) -> None:
 
     header = f"📶 *Above SMA150* — {now}\n_{len(matches)} stocks, sorted by proximity_\n\n"
     _post(header + "\n".join(lines))
+
+
+def send_earnings_week(matches: list) -> None:
+    """Send Sunday earnings calendar — tickers with earnings in the next 7 days."""
+    from datetime import datetime, timezone
+    now = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
+
+    if not matches:
+        _post(f"📅 *Earnings This Week* — {now}\nNo earnings in the next 7 days for watchlist stocks.")
+        return
+
+    # Group by date
+    by_day: dict = {}
+    for m in matches:
+        key = (m["days_away"], m["date_str"])
+        by_day.setdefault(key, []).append(m["ticker"])
+
+    lines = []
+    for (days, date_str), tickers in sorted(by_day.items()):
+        lines.append(f"*{date_str}* (+{days}d): {', '.join(tickers)}")
+
+    _post(f"📅 *Earnings This Week* — {now}\n\n" + "\n".join(lines))
 
 
 def send_backtest(stats: dict, years: int = 3) -> None:
