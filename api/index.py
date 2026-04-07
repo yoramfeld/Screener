@@ -274,10 +274,9 @@ def webhook():
 
     # ------------------------------------------------------------------ /pnl
     elif cmd == "/pnl":
-        if _trigger("pnl"):
-            _send_message("📒 Fetching P&L history...")
-        else:
-            _send_message("Failed to trigger. Check GITHUB_PAT in Vercel env vars.")
+        import portfolio as pf
+        import notifier
+        notifier.send_pnl(pf.get_trades())
 
     # ------------------------------------------------------------------ /market
     elif cmd == "/market":
