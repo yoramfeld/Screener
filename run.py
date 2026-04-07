@@ -61,20 +61,23 @@ def run_screen() -> None:
         return
 
     tickers = universe.get_universe()
-    signals_sent = 0
+    sent_signals = []
 
     for signal in screener.stream_signals(tickers):
         if database.was_alerted(signal["ticker"], signal["signal_type"]):
             continue
         database.mark_alerted(signal["ticker"], signal["signal_type"])
         notifier.send_signal(signal)
-        signals_sent += 1
+        sent_signals.append(signal)
 
-    if signals_sent == 0:
+    if not sent_signals:
         debug = screener.sample_debug(tickers[0] if tickers else "AAPL")
         notifier.send_summary([], total_screened=len(tickers), sample_tickers=tickers[:3], debug=debug)
+    else:
+        notifier.send_summary(sent_signals, total_screened=len(tickers), sample_tickers=tickers[:3])
+        notifier.send_top_buys(sent_signals)
 
-    log.info("Done — %d signal(s) sent", signals_sent)
+    log.info("Done — %d signal(s) sent", len(sent_signals))
 
     positions = portfolio.enrich_positions()
     if positions:

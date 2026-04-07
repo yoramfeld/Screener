@@ -209,45 +209,49 @@ def _build_message(
             f"{debug_line}"
         )
 
-    header = f"🔔 *Swing Screener* — {now}\n{screened_line}{len(signals)} setup(s) found:\n\n"
-    body = "\n\n".join(_format_signal(s) for s in signals)
-
-    _BUY_TYPES = {"golden_cross", "rsi_oversold", "atr_buy", "sma_alignment",
-                  "high_pullback", "channel_buy", "bounce"}
-    buy_sigs = [s for s in signals if s.get("signal_type") in _BUY_TYPES]
-
-    def _analyst_delta(sig: Signal) -> int:
-        rec = sig.get("analyst_rec") or {}
-        return rec.get("buy", 0) - rec.get("hold", 0) - rec.get("sell", 0)
-
-    ranked = sorted(buy_sigs, key=_analyst_delta, reverse=True)[:10]
-    if ranked:
-        _LABELS = {
-            "bounce":       "Bounce",
-            "golden_cross": "Golden Cross",
-            "rsi_oversold": "RSI Oversold",
-            "atr_buy":      "ATR Buy",
-            "sma_alignment":"SMA Alignment",
-            "high_pullback":"52w High Pullback",
-            "channel_buy":  "Channel Buy",
-        }
-        top_lines = []
-        for i, s in enumerate(ranked, 1):
-            rec   = s.get("analyst_rec") or {}
-            b, h, sell = rec.get("buy", 0), rec.get("hold", 0), rec.get("sell", 0)
-            delta = b - h - sell
-            sign  = "+" if delta >= 0 else ""
-            label = _LABELS.get(s["signal_type"], s["signal_type"])
-            rec_str = f"B{b}/H{h}/S{sell} (Δ{sign}{delta})" if (b or h or sell) else "no analyst data"
-            top_lines.append(f"{i}. *{s['ticker']}* — {label}  |  {rec_str}")
-        body += "\n\n🏆 *Top Buys by Analyst Consensus*\n" + "\n".join(top_lines)
-
-    return header + body
+    header = f"🔔 *Swing Screener* — {now}\n{screened_line}{len(signals)} setup(s) found."
+    return header
 
 
 def send_summary(signals: List[Signal], aborted: bool = False, total_screened: int = 0, sample_tickers: List[str] = [], debug: str = "") -> None:
     """Send the end-of-run summary (abort notice or 'no signals found')."""
     _post(_build_message(signals, aborted=aborted, total_screened=total_screened, sample_tickers=sample_tickers, debug=debug))
+
+
+def send_top_buys(signals: List[Signal]) -> None:
+    """Send Top 10 buy signals ranked by analyst buy-hold-sell delta."""
+    _BUY_TYPES = {"golden_cross", "rsi_oversold", "atr_buy", "sma_alignment",
+                  "high_pullback", "channel_buy", "bounce"}
+    _LABELS = {
+        "bounce":        "Bounce",
+        "golden_cross":  "Golden Cross",
+        "rsi_oversold":  "RSI Oversold",
+        "atr_buy":       "ATR Buy",
+        "sma_alignment": "SMA Alignment",
+        "high_pullback": "52w High Pullback",
+        "channel_buy":   "Channel Buy",
+    }
+
+    def _delta(sig: Signal) -> int:
+        rec = sig.get("analyst_rec") or {}
+        return rec.get("buy", 0) - rec.get("hold", 0) - rec.get("sell", 0)
+
+    buy_sigs = [s for s in signals if s.get("signal_type") in _BUY_TYPES]
+    ranked   = sorted(buy_sigs, key=_delta, reverse=True)[:10]
+    if not ranked:
+        return
+
+    lines = []
+    for i, s in enumerate(ranked, 1):
+        rec   = s.get("analyst_rec") or {}
+        b, h, sell = rec.get("buy", 0), rec.get("hold", 0), rec.get("sell", 0)
+        delta = b - h - sell
+        sign  = "+" if delta >= 0 else ""
+        label = _LABELS.get(s["signal_type"], s["signal_type"])
+        rec_str = f"B{b}/H{h}/S{sell} (Δ{sign}{delta})" if (b or h or sell) else "no analyst data"
+        lines.append(f"{i}. *{s['ticker']}* — {label}  |  {rec_str}")
+
+    _post("🏆 *Top Buys by Analyst Consensus*\n\n" + "\n".join(lines))
 
 
 def send_pnl(trades: list) -> None:
