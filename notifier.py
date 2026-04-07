@@ -332,7 +332,7 @@ def send_portfolio(positions: List[Position]) -> None:
     total_pct    = (total_dollar / total_cost * 100) if total_cost else 0
     total_sign   = "+" if total_dollar >= 0 else ""
     summary = (
-        f"\n💼 *Total:* ${total_value:,.0f}  |  "
+        f"\n\n💼 *Total:* ${total_value:,.0f}  |  "
         f"{total_sign}${total_dollar:,.0f} ({total_sign}{total_pct:.1f}%)"
     )
 
