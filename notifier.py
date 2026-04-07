@@ -225,17 +225,23 @@ def send_pnl(trades: list) -> None:
         _post("📒 *P&L History* — no closed trades yet.")
         return
 
+    from datetime import date as _date
     lines = []
     for t in trades:
         emoji       = "🟢" if t["pct_pnl"] >= 0 else "🔴"
         sign        = "+" if t["pct_pnl"] >= 0 else ""
         dollar_sign = "+" if t["dollar_pnl"] >= 0 else ""
         qty_str     = f"{t['quantity']:g} shares  " if t.get("quantity") else ""
+        try:
+            days_held = (_date.fromisoformat(t["sell_date"]) - _date.fromisoformat(t["buy_date"])).days
+            days_str  = f"  |  {days_held}d held"
+        except Exception:
+            days_str  = ""
         lines.append(
             f"{emoji} *{t['ticker']}*  {qty_str}\n"
             f"  Buy: ${t['buy_price']} ({t['buy_date']})  →  "
             f"Sell: ${t['sell_price']} ({t['sell_date']})\n"
-            f"  Profit: {sign}{t['pct_pnl']}%  ({dollar_sign}${t['dollar_pnl']:,.2f})"
+            f"  Profit: {sign}{t['pct_pnl']}%  ({dollar_sign}${t['dollar_pnl']:,.2f}){days_str}"
         )
 
     total_dollars  = sum(t["dollar_pnl"] for t in trades)
