@@ -148,20 +148,37 @@ def _check_stock(ticker: str) -> str:
         return f"❌ Could not fetch *{ticker}*: {exc}"
 
 
+def _next_open(now) -> str:
+    """Return 'in Xh Ym' until the next NYSE market open (9:30 AM ET)."""
+    from datetime import datetime, time, timedelta
+    candidate = now.replace(hour=9, minute=30, second=0, microsecond=0)
+    if now >= candidate:
+        candidate += timedelta(days=1)
+    while True:
+        date_str = candidate.strftime("%Y-%m-%d")
+        if candidate.weekday() < 5 and date_str not in _HOLIDAYS:
+            break
+        candidate += timedelta(days=1)
+    delta   = candidate - now
+    hours   = int(delta.total_seconds() // 3600)
+    minutes = int((delta.total_seconds() % 3600) // 60)
+    return f"{hours}h {minutes:02d}m"
+
+
 def _market_status() -> str:
     from datetime import datetime, time
     now = datetime.now(tz=_ET)
     date_str = now.strftime("%Y-%m-%d")
     if now.weekday() >= 5:
-        return "🔴 Market is *CLOSED* (weekend)"
+        return f"🔴 Market is *CLOSED* (weekend) — opens in {_next_open(now)}"
     if date_str in _HOLIDAYS:
-        return "🔴 Market is *CLOSED* (holiday)"
+        return f"🔴 Market is *CLOSED* (holiday) — opens in {_next_open(now)}"
     t = now.time()
     if t < time(9, 30):
-        return f"🌅 Market opens at 9:30 AM ET (now {now.strftime('%H:%M')} ET)"
+        return f"🌅 Market opens at 9:30 AM ET — in {_next_open(now)} (now {now.strftime('%H:%M')} ET)"
     if t <= time(16, 0):
         return f"🟢 Market is *OPEN* — closes at 4:00 PM ET (now {now.strftime('%H:%M')} ET)"
-    return f"🌆 Market is *CLOSED* — after hours (now {now.strftime('%H:%M')} ET)"
+    return f"🌆 Market is *CLOSED* (after hours) — opens in {_next_open(now)} (now {now.strftime('%H:%M')} ET)"
 
 
 @app.route("/api/index", methods=["POST"])
