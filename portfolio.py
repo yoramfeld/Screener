@@ -185,6 +185,16 @@ def close_position(ticker: str, sell_price: float, quantity: Optional[float] = N
     return trade
 
 
+def get_stop_snapshot() -> dict:
+    """Return {ticker: stop} from the last /p run."""
+    return _kv_get("stops_snapshot") or {}
+
+
+def save_stop_snapshot(stops: dict) -> None:
+    """Persist {ticker: stop} so the next /p run can detect changes."""
+    _kv_set("stops_snapshot", stops)
+
+
 def get_trades() -> List[Trade]:
     return _load_trades()
 

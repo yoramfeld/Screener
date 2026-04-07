@@ -295,37 +295,53 @@ def send_pnl(trades: list) -> None:
 
 
 def send_portfolio(positions: List[Position]) -> None:
-    """Send current stop levels for all open positions."""
+    """Send compact portfolio summary with stop-change alerts."""
+    import portfolio as pf
     if not positions:
         _post("📋 *Portfolio* — no open positions.")
         return
 
-    lines = []
+    snapshot   = pf.get_stop_snapshot()
+    new_snap   = {}
+    lines      = []
+
     for p in sorted(positions, key=lambda x: x["pct_change"], reverse=True):
-        arrow      = "🟢" if p["pct_change"] >= 0 else "🔴"
-        sign       = "+" if p["pct_change"] >= 0 else ""
-        stop_pnl   = (p["stop"] - p["buy_price"]) / p["buy_price"] * 100
-        stop_sign  = "+" if stop_pnl >= 0 else ""
-        warning    = "  ⚠️ STOP HIT" if p["stop_hit"] else ""
-        sma_arrow  = "↑" if p.get("sma150_rising") else "↓"
+        ticker    = p["ticker"]
+        arrow     = "🟢" if p["pct_change"] >= 0 else "🔴"
+        sign      = "+" if p["pct_change"] >= 0 else ""
+        sma_arrow = "↑" if p.get("sma150_rising") else "↓"
+        stop      = p["stop"]
+        new_snap[ticker] = stop
+
+        # Stop-change alert vs last snapshot
+        prev_stop  = snapshot.get(ticker)
+        stop_alert = ""
+        if prev_stop and prev_stop > 0:
+            chg = (stop - prev_stop) / prev_stop * 100
+            if abs(chg) >= 1:
+                chg_sign = "+" if chg >= 0 else ""
+                stop_alert = f" ⚡ moved {chg_sign}{chg:.1f}%"
+
+        hit = "  ⚠️ STOP HIT" if p["stop_hit"] else ""
         lines.append(
-            f"{arrow} *{p['ticker']}* — entry ${p['buy_price']}  ({p['buy_date']})\n"
-            f"  Now: ${p['current']} ({sign}{p['pct_change']}%)  "
-            f"|  SMA150: ${p['sma150']}{sma_arrow}  "
-            f"|  Stop: ${p['stop']} ({stop_sign}{stop_pnl:.1f}%){warning}"
+            f"{arrow} *{ticker}* ${p['buy_price']}→{p['current']} ({sign}{p['pct_change']}%)\n"
+            f"SMA150: ${p['sma150']}{sma_arrow}\n"
+            f"Stop: ${stop}{stop_alert}{hit}"
         )
 
-    total_value    = sum(p["current"] * p["quantity"] for p in positions)
-    total_cost     = sum(p["buy_price"] * p["quantity"] for p in positions)
-    total_dollar   = total_value - total_cost
-    total_pct      = (total_dollar / total_cost * 100) if total_cost else 0
-    total_sign     = "+" if total_dollar >= 0 else ""
+    pf.save_stop_snapshot(new_snap)
+
+    total_value  = sum(p["current"] * p["quantity"] for p in positions)
+    total_cost   = sum(p["buy_price"] * p["quantity"] for p in positions)
+    total_dollar = total_value - total_cost
+    total_pct    = (total_dollar / total_cost * 100) if total_cost else 0
+    total_sign   = "+" if total_dollar >= 0 else ""
     summary = (
-        f"\n\n💼 *Total:* ${total_value:,.0f}  |  "
+        f"\n💼 *Total:* ${total_value:,.0f}  |  "
         f"{total_sign}${total_dollar:,.0f} ({total_sign}{total_pct:.1f}%)"
     )
 
-    _post("📋 *Portfolio — Stop Levels*\n\n" + "\n\n".join(lines) + summary)
+    _post("📋 *Portfolio*\n\n" + "\n\n".join(lines) + summary)
 
 
 def send_above(matches: list) -> None:
