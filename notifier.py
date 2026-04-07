@@ -317,9 +317,7 @@ def send_portfolio(positions: List[Position]) -> None:
         if filed and filed > 0:
             gap = (stop - filed) / filed * 100
             if gap >= 1:
-                stop_alert = f" ⚡ update to ${stop} (filed: ${filed})"
-        elif not filed:
-            stop_alert = " (no order filed — use /s to record)"
+                stop_alert = " ⚡"
 
         hit = "  ⚠️ STOP HIT" if p["stop_hit"] else ""
         lines.append(
