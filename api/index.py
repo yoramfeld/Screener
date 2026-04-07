@@ -272,6 +272,24 @@ def webhook():
             else:
                 _send_message(f"❌ *{ticker}* not found in your portfolio.")
 
+    # ------------------------------------------------------------------ /purge
+    elif cmd == "/purge":
+        if len(parts) < 2:
+            _send_message("Usage: `/purge AAPL`")
+        else:
+            import portfolio
+            ticker = parts[1].upper()
+            had_pos, trades_removed = portfolio.purge_ticker(ticker)
+            if had_pos or trades_removed:
+                parts_msg = []
+                if had_pos:
+                    parts_msg.append("open position")
+                if trades_removed:
+                    parts_msg.append(f"{trades_removed} trade(s) from history")
+                _send_message(f"🗑️ *{ticker}* purged: {' and '.join(parts_msg)}.")
+            else:
+                _send_message(f"❌ *{ticker}* not found anywhere.")
+
     # ------------------------------------------------------------------ /pnl
     elif cmd == "/pnl":
         import portfolio as pf
@@ -298,6 +316,7 @@ def webhook():
             "`/sell AAPL 185.20` — sell all shares\n"
             "`/sell AAPL 185.20 30` — partial sell\n"
             "`/delete AAPL` — remove a position\n"
+            "`/purge AAPL` — remove from positions and P&L history\n"
             "`/pnl` — closed trades & total profit\n\n"
             "*Info*\n"
             "`/market` — is the market open?\n"

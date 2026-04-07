@@ -102,6 +102,27 @@ def delete_position(ticker: str) -> bool:
     return True
 
 
+def purge_ticker(ticker: str) -> tuple[bool, int]:
+    """Remove a ticker from open positions AND trade history.
+    Returns (had_position, trades_removed).
+    """
+    ticker    = ticker.upper()
+    positions = _load_positions()
+    had_pos   = ticker in positions
+    if had_pos:
+        del positions[ticker]
+        _save_positions(positions)
+
+    trades   = _load_trades()
+    filtered = [t for t in trades if t.get("ticker") != ticker]
+    removed  = len(trades) - len(filtered)
+    if removed:
+        _save_trades(filtered)
+
+    log.info("Purged %s: position=%s, trades_removed=%d", ticker, had_pos, removed)
+    return had_pos, removed
+
+
 def add_position(ticker: str, buy_price: float, quantity: float) -> None:
     ticker    = ticker.upper()
     positions = _load_positions()
