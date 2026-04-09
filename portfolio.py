@@ -255,7 +255,7 @@ def enrich_positions() -> List[Position]:
             current    = float(df["Close"].iloc[-1])
             sma150     = float(df["sma150"].iloc[-1])
             sma_5ago   = float(df["sma150"].iloc[-6])
-            stop       = sma150 * (1 - STOP_BELOW_SMA)
+            stop       = round(current * (1 - STOP_BELOW_SMA))
             pct_chg    = (current - pos["buy_price"]) / pos["buy_price"] * 100
             dollar_chg = (current - pos["buy_price"]) * pos["quantity"]
 

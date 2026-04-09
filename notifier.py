@@ -297,12 +297,14 @@ def send_pnl(trades: list) -> None:
 def send_portfolio(positions: List[Position]) -> None:
     """Send compact portfolio summary with stop-change alerts."""
     import portfolio as pf
+    n = len(positions)
     if not positions:
-        _post("📋 *Portfolio* — no open positions.")
+        _post("📋 *Portfolio (0)* — no open positions.")
         return
 
-    stop_orders = pf.get_stop_orders()
-    lines       = []
+    stop_orders   = pf.get_stop_orders()
+    lines         = []
+    updated_stops = {}
 
     for p in sorted(positions, key=lambda x: x["pct_change"], reverse=True):
         ticker    = p["ticker"]
@@ -311,13 +313,12 @@ def send_portfolio(positions: List[Position]) -> None:
         sma_arrow = "↑" if p.get("sma150_rising") else "↓"
         stop      = p["stop"]
 
-        # Alert if recommended stop is >=1% above the user's filed stop order
-        filed     = stop_orders.get(ticker)
+        # Alert if computed stop differs from the user's filed stop order
+        filed      = stop_orders.get(ticker)
         stop_alert = ""
-        if filed and filed > 0:
-            gap = (stop - filed) / filed * 100
-            if gap >= 1:
-                stop_alert = " ⚡"
+        if filed is not None and stop != filed:
+            stop_alert = " ⚡"
+            updated_stops[ticker] = stop
 
         hit = "  ⚠️ STOP HIT" if p["stop_hit"] else ""
         lines.append(
@@ -325,6 +326,9 @@ def send_portfolio(positions: List[Position]) -> None:
             f"SMA150: ${p['sma150']}{sma_arrow}\n"
             f"Stop: ${stop}{stop_alert}{hit}"
         )
+
+    if updated_stops:
+        pf.set_stop_orders(updated_stops)
 
     total_value  = sum(p["current"] * p["quantity"] for p in positions)
     total_cost   = sum(p["buy_price"] * p["quantity"] for p in positions)
@@ -336,7 +340,7 @@ def send_portfolio(positions: List[Position]) -> None:
         f"{total_sign}${total_dollar:,.0f} ({total_sign}{total_pct:.1f}%)"
     )
 
-    _post("📋 *Portfolio*\n\n" + "\n\n".join(lines) + summary)
+    _post(f"📋 *Portfolio ({n})*\n\n" + "\n\n".join(lines) + summary)
 
 
 def send_above(matches: list) -> None:
