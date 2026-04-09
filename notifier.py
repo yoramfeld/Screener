@@ -320,11 +320,14 @@ def send_portfolio(positions: List[Position]) -> None:
             stop_alert = " ⚡"
             updated_stops[ticker] = stop
 
-        hit = "  ⚠️ STOP HIT" if p["stop_hit"] else ""
+        hit        = "  ⚠️ STOP HIT" if p["stop_hit"] else ""
+        stock_val  = p["current"] * p["quantity"] if p.get("quantity") else None
+        total_line = f"\nTotal: ${stock_val:,.0f}" if (n > 1 and stock_val is not None) else ""
         lines.append(
             f"{arrow} *{ticker}* ${p['buy_price']}→{p['current']} ({sign}{p['pct_change']}%)\n"
             f"SMA150: ${p['sma150']}{sma_arrow}\n"
             f"Stop: ${stop}{stop_alert}{hit}"
+            f"{total_line}"
         )
 
     if updated_stops:
