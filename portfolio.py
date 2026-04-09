@@ -214,6 +214,39 @@ def get_positions() -> List[dict]:
 # Live enrichment
 # ---------------------------------------------------------------------------
 
+def _latest_prices(tickers: list) -> dict:
+    """Return {ticker: latest_price} using intraday 1-min data."""
+    try:
+        raw = yf.download(
+            tickers,
+            period="1d",
+            interval="1m",
+            auto_adjust=True,
+            progress=False,
+            group_by="ticker",
+            threads=True,
+        )
+        prices = {}
+        for ticker in tickers:
+            try:
+                if isinstance(raw.columns, pd.MultiIndex):
+                    if ticker in raw.columns.get_level_values(0):
+                        col = raw[ticker]["Close"]
+                    else:
+                        col = raw.xs(ticker, axis=1, level=1)["Close"]
+                else:
+                    col = raw["Close"]
+                col = col.dropna()
+                if not col.empty:
+                    prices[ticker] = float(col.iloc[-1])
+            except Exception:
+                pass
+        return prices
+    except Exception as exc:
+        log.warning("Intraday price fetch failed: %s", exc)
+        return {}
+
+
 def enrich_positions() -> List[Position]:
     """Fetch current price and SMA150 for all open positions."""
     positions = get_positions()
@@ -235,6 +268,8 @@ def enrich_positions() -> List[Position]:
         log.error("Portfolio data fetch failed: %s", exc)
         return []
 
+    live_prices = _latest_prices(tickers)
+
     enriched = []
     for pos in positions:
         try:
@@ -252,7 +287,7 @@ def enrich_positions() -> List[Position]:
                 continue
 
             df["sma150"] = df["Close"].rolling(150).mean()
-            current    = float(df["Close"].iloc[-1])
+            current    = live_prices.get(ticker) or float(df["Close"].iloc[-1])
             sma150     = float(df["sma150"].iloc[-1])
             sma_5ago   = float(df["sma150"].iloc[-6])
             stop       = round(sma150 * (1 - STOP_BELOW_SMA))
