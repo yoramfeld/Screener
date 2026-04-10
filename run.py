@@ -86,8 +86,7 @@ def run_screen() -> None:
         database.mark_alerted(signal["ticker"], signal["signal_type"])
 
     if not top_signals:
-        debug = screener.sample_debug(tickers[0] if tickers else "AAPL")
-        notifier.send_summary([], total_screened=len(tickers), sample_tickers=tickers[:3], debug=debug)
+        notifier.send_summary([], total_screened=len(tickers))
     else:
         notifier.send_scan_results(top_signals)
 
