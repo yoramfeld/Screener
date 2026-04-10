@@ -91,11 +91,7 @@ def run_screen() -> None:
     else:
         notifier.send_scan_results(top_signals)
 
-    log.info("Done — %d signal(s) sent", len(sent_signals))
-
-    positions = portfolio.enrich_positions()
-    if positions:
-        notifier.send_portfolio(positions)
+    log.info("Done — %d signal(s) sent", len(top_signals))
 
 
 def run_portfolio() -> None:
