@@ -61,12 +61,32 @@ def run_screen() -> None:
         return
 
     tickers = universe.get_universe()
-    sent_signals = []
 
+    # Collect all new signals first
+    new_signals = []
     for signal in screener.stream_signals(tickers):
         if database.was_alerted(signal["ticker"], signal["signal_type"]):
             continue
+        new_signals.append(signal)
+
+    # Rank by analyst buy ratio (desc), tiebreak by SMA150 proximity (asc)
+    def _score(sig):
+        rec   = sig.get("analyst_rec") or {}
+        total = (rec.get("buy") or 0) + (rec.get("hold") or 0) + (rec.get("sell") or 0)
+        buy_ratio = (rec.get("buy") or 0) / total if total else 0
+        sma150    = sig.get("sma150")
+        close     = sig.get("close") or 0
+        sma_prox  = (close - sma150) / sma150 if sma150 else 1.0
+        return (-buy_ratio, sma_prox)
+
+    top_signals = sorted(new_signals, key=_score)[:10]
+
+    # Mark all new signals as alerted (whether sent or not)
+    for signal in new_signals:
         database.mark_alerted(signal["ticker"], signal["signal_type"])
+
+    sent_signals = []
+    for signal in top_signals:
         notifier.send_signal(signal)
         sent_signals.append(signal)
 
