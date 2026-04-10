@@ -793,11 +793,11 @@ def _evaluate_sma150_crossover(ticker: str, df: pd.DataFrame) -> Optional[Signal
     if pct_from_sma > 0.05:
         return None
 
-    # Volume confirmation
+    # Volume confirmation — require 1.5× average for a meaningful crossover
     avg_vol   = float(df["Volume"].iloc[-21:-1].mean())
     today_vol = float(df["Volume"].iloc[-1])
     volume_ratio = today_vol / avg_vol if avg_vol > 0 else 0.0
-    if volume_ratio < config.VOLUME_MIN_RATIO:
+    if volume_ratio < 1.5:
         return None
 
     earnings_flag = _has_earnings_soon(ticker)
