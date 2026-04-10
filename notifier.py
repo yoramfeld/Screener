@@ -221,7 +221,8 @@ def send_scan_results(signals: List[Signal]) -> None:
     """Send a single compact scan results message (max 5 signals)."""
     from datetime import datetime, timezone
     _LABELS = {
-        "bounce":        "Bounce",
+        "bounce":           "Bounce",
+        "sma150_crossover": "SMA150 Cross ↑",
         "golden_cross":  "Golden Cross",
         "rsi_oversold":  "RSI Oversold",
         "atr_buy":       "ATR Buy",
@@ -236,7 +237,7 @@ def send_scan_results(signals: List[Signal]) -> None:
 
     def _detail(sig: Signal) -> str:
         st = sig["signal_type"]
-        if st == "bounce":
+        if st in ("bounce", "sma150_crossover"):
             return f"+{sig['pct_from_sma']}% SMA150"
         if st == "golden_cross":
             d = sig.get("days_ago", 0)
@@ -269,7 +270,7 @@ def send_scan_results(signals: List[Signal]) -> None:
 def send_top_buys(signals: List[Signal]) -> None:
     """Send Top 10 buy signals ranked by analyst buy-hold-sell delta."""
     _BUY_TYPES = {"golden_cross", "rsi_oversold", "atr_buy", "sma_alignment",
-                  "high_pullback", "channel_buy", "bounce"}
+                  "high_pullback", "channel_buy", "bounce", "sma150_crossover"}
     _LABELS = {
         "bounce":        "Bounce",
         "golden_cross":  "Golden Cross",

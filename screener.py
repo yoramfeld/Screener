@@ -183,6 +183,10 @@ def stream_signals(tickers: List[str]) -> Generator[Signal, None, None]:
             if bounce:
                 yield bounce
 
+            crossover = _evaluate_sma150_crossover(ticker, df)
+            if crossover:
+                yield crossover
+
             cross = _evaluate_cross(ticker, df)
             if cross:
                 yield cross
@@ -760,6 +764,55 @@ def scan_top_recommendations(tickers: List[str], top_n: int = 10, min_analysts: 
 
     results.sort(key=lambda x: (x["score"], x["buy"]), reverse=True)
     return results[:top_n]
+
+
+def _evaluate_sma150_crossover(ticker: str, df: pd.DataFrame) -> Optional[Signal]:
+    """Price crosses above SMA150 today (was below yesterday) with rising SMA and volume."""
+    df = df.dropna(subset=["Close", "Volume"])
+
+    df["sma150"] = df["Close"].rolling(150).mean()
+    if df["sma150"].isna().iloc[-1] or df["sma150"].isna().iloc[-2]:
+        return None
+
+    sma_today = float(df["sma150"].iloc[-1])
+    sma_5ago  = float(df["sma150"].iloc[-6])
+
+    # SMA150 must be rising
+    if sma_today <= sma_5ago:
+        return None
+
+    close_today = float(df["Close"].iloc[-1])
+    close_prev  = float(df["Close"].iloc[-2])
+
+    # Price crossed above SMA150 today
+    if not (close_prev < sma_today and close_today > sma_today):
+        return None
+
+    # Not extended — close within 5% above SMA150
+    pct_from_sma = (close_today - sma_today) / sma_today
+    if pct_from_sma > 0.05:
+        return None
+
+    # Volume confirmation
+    avg_vol   = float(df["Volume"].iloc[-21:-1].mean())
+    today_vol = float(df["Volume"].iloc[-1])
+    volume_ratio = today_vol / avg_vol if avg_vol > 0 else 0.0
+    if volume_ratio < config.VOLUME_MIN_RATIO:
+        return None
+
+    earnings_flag = _has_earnings_soon(ticker)
+    analyst_rec   = _get_analyst_rec(ticker)
+
+    return {
+        "signal_type":  "sma150_crossover",
+        "ticker":       ticker,
+        "close":        round(close_today, 2),
+        "sma150":       round(sma_today, 2),
+        "pct_from_sma": round(pct_from_sma * 100, 2),
+        "volume_ratio": round(volume_ratio * 100, 1),
+        "earnings_flag": earnings_flag,
+        "analyst_rec":  analyst_rec,
+    }
 
 
 def _evaluate_bounce(ticker: str, df: pd.DataFrame) -> Optional[Signal]:
