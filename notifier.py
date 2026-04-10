@@ -218,6 +218,55 @@ def send_summary(signals: List[Signal], aborted: bool = False, total_screened: i
     _post(_build_message(signals, aborted=aborted, total_screened=total_screened, sample_tickers=sample_tickers, debug=debug))
 
 
+def send_scan_results(signals: List[Signal]) -> None:
+    """Send a single compact scan results message (max 5 signals)."""
+    from datetime import datetime, timezone
+    _LABELS = {
+        "bounce":        "Bounce",
+        "golden_cross":  "Golden Cross",
+        "rsi_oversold":  "RSI Oversold",
+        "atr_buy":       "ATR Buy",
+        "sma_alignment": "SMA Align",
+        "high_pullback": "52w Pullback",
+        "channel_buy":   "Channel Buy",
+        "death_cross":   "Death Cross",
+        "rsi_overbought":"RSI Overbought",
+        "atr_stop":      "ATR Stop",
+        "channel_sell":  "Channel Sell",
+    }
+
+    def _detail(sig: Signal) -> str:
+        st = sig["signal_type"]
+        if st == "bounce":
+            return f"+{sig['pct_from_sma']}% SMA150"
+        if st == "golden_cross":
+            d = sig.get("days_ago", 0)
+            return "today" if d == 0 else f"{d}d ago"
+        if st == "channel_buy":
+            return f"{sig['pct_from_low']:.1f}% from floor"
+        if st == "high_pullback":
+            return f"{sig['pct_below']}% off 52w high"
+        if st == "rsi_oversold":
+            return f"RSI {sig['rsi']}"
+        if st == "sma_alignment":
+            return f"SMA50>{sig['sma150']}>SMA200"
+        if st == "atr_buy":
+            return f"stop ${sig['atr_stop']}"
+        return ""
+
+    now   = datetime.now(tz=timezone.utc).strftime("%b %-d")
+    lines = [f"📡 *Scan — {now}*\n"]
+    for i, sig in enumerate(signals, 1):
+        label  = _LABELS.get(sig["signal_type"], sig["signal_type"])
+        detail = _detail(sig)
+        detail_str = f"  {detail}" if detail else ""
+        chart  = f"[Chart]({_tradingview_url(sig['ticker'])})"
+        warn   = "  ⚠️" if sig.get("earnings_flag") else ""
+        lines.append(f"{i}. *{sig['ticker']}* — {label}  ${sig['close']}{detail_str}  {chart}{warn}")
+
+    _post("\n".join(lines))
+
+
 def send_top_buys(signals: List[Signal]) -> None:
     """Send Top 10 buy signals ranked by analyst buy-hold-sell delta."""
     _BUY_TYPES = {"golden_cross", "rsi_oversold", "atr_buy", "sma_alignment",

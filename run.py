@@ -79,23 +79,17 @@ def run_screen() -> None:
         sma_prox  = (close - sma150) / sma150 if sma150 else 1.0
         return (-buy_ratio, sma_prox)
 
-    top_signals = sorted(new_signals, key=_score)[:10]
+    top_signals = sorted(new_signals, key=_score)[:5]
 
     # Mark all new signals as alerted (whether sent or not)
     for signal in new_signals:
         database.mark_alerted(signal["ticker"], signal["signal_type"])
 
-    sent_signals = []
-    for signal in top_signals:
-        notifier.send_signal(signal)
-        sent_signals.append(signal)
-
-    if not sent_signals:
+    if not top_signals:
         debug = screener.sample_debug(tickers[0] if tickers else "AAPL")
         notifier.send_summary([], total_screened=len(tickers), sample_tickers=tickers[:3], debug=debug)
     else:
-        notifier.send_summary(sent_signals, total_screened=len(tickers), sample_tickers=tickers[:3])
-        notifier.send_top_buys(sent_signals)
+        notifier.send_scan_results(top_signals)
 
     log.info("Done — %d signal(s) sent", len(sent_signals))
 
