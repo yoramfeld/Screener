@@ -21,6 +21,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Dict, Generator, List, Optional
 
 import pandas as pd
+import requests
 import yfinance as yf
 
 import config
@@ -33,6 +34,28 @@ Signal = Dict  # {signal_type, ticker, close, ...}
 # ---------------------------------------------------------------------------
 # Market context
 # ---------------------------------------------------------------------------
+
+def fetch_fear_greed() -> dict:
+    """Return {"score": float, "rating": str} from the CNN Fear & Greed index.
+
+    Ratings: "Extreme Fear" | "Fear" | "Neutral" | "Greed" | "Extreme Greed"
+    Falls back to {"score": 50, "rating": "Neutral"} on any error.
+    """
+    try:
+        resp = requests.get(
+            "https://production.dataviz.cnn.io/index/fearandgreed/graphdata/",
+            headers={"User-Agent": "Mozilla/5.0"},
+            timeout=6,
+        )
+        data   = resp.json()
+        score  = float(data["fear_and_greed"]["score"])
+        rating = data["fear_and_greed"]["rating"]
+        log.info("Fear & Greed: %.1f (%s)", score, rating)
+        return {"score": round(score, 1), "rating": rating}
+    except Exception as exc:
+        log.warning("Fear & Greed fetch failed: %s — assuming Neutral", exc)
+        return {"score": 50, "rating": "Neutral"}
+
 
 def market_is_healthy() -> bool:
     """Return False if SPY is down more than SPY_DROP_THRESHOLD intraday."""

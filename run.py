@@ -61,6 +61,7 @@ def run_screen() -> None:
         return
 
     tickers = universe.get_universe()
+    fg      = screener.fetch_fear_greed()
 
     # Collect all new signals first
     new_signals = []
@@ -70,25 +71,39 @@ def run_screen() -> None:
         new_signals.append(signal)
 
     # Rank by analyst buy ratio (desc), tiebreak by SMA150 proximity (asc)
-    def _score(sig):
+    def _buy_ratio(sig):
         rec   = sig.get("analyst_rec") or {}
         total = (rec.get("buy") or 0) + (rec.get("hold") or 0) + (rec.get("sell") or 0)
-        buy_ratio = (rec.get("buy") or 0) / total if total else 0
-        sma150    = sig.get("sma150")
-        close     = sig.get("close") or 0
-        sma_prox  = (close - sma150) / sma150 if sma150 else 1.0
-        return (-buy_ratio, sma_prox)
+        return (rec.get("buy") or 0) / total if total else 0
 
-    top_signals = sorted(new_signals, key=_score)[:5]
+    def _score(sig):
+        sma150   = sig.get("sma150")
+        close    = sig.get("close") or 0
+        sma_prox = (close - sma150) / sma150 if sma150 else 1.0
+        return (-_buy_ratio(sig), sma_prox)
+
+    # Deduplicate: one signal per ticker (keep best-scored)
+    best_per_ticker: dict = {}
+    for sig in new_signals:
+        t = sig["ticker"]
+        if t not in best_per_ticker or _score(sig) < _score(best_per_ticker[t]):
+            best_per_ticker[t] = sig
+    unique_signals = list(best_per_ticker.values())
+
+    top_signals = sorted(unique_signals, key=_score)[:5]
+
+    # Extreme Fear: suppress unless the signal has very strong analyst backing
+    if fg["rating"] == "Extreme Fear":
+        top_signals = [s for s in top_signals if _buy_ratio(s) >= 0.75]
 
     # Mark all new signals as alerted (whether sent or not)
     for signal in new_signals:
         database.mark_alerted(signal["ticker"], signal["signal_type"])
 
     if not top_signals:
-        notifier.send_summary([], total_screened=len(tickers))
+        notifier.send_summary([], total_screened=len(tickers), fear_greed=fg)
     else:
-        notifier.send_scan_results(top_signals)
+        notifier.send_scan_results(top_signals, fear_greed=fg)
 
     log.info("Done — %d signal(s) sent", len(top_signals))
 

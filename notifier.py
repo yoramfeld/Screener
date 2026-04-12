@@ -212,12 +212,15 @@ def _build_message(
     return header
 
 
-def send_summary(signals: List[Signal], aborted: bool = False, total_screened: int = 0, sample_tickers: List[str] = [], debug: str = "") -> None:
+def send_summary(signals: List[Signal], aborted: bool = False, total_screened: int = 0, sample_tickers: List[str] = [], debug: str = "", fear_greed: dict = None) -> None:
     """Send the end-of-run summary (abort notice or 'no signals found')."""
-    _post(_build_message(signals, aborted=aborted, total_screened=total_screened, sample_tickers=sample_tickers, debug=debug))
+    msg = _build_message(signals, aborted=aborted, total_screened=total_screened, sample_tickers=sample_tickers, debug=debug)
+    if fear_greed and fear_greed.get("rating") == "Extreme Fear":
+        msg += f"\n⚠️ Market in *Extreme Fear* (F&G: {fear_greed['score']}) — scan suppressed."
+    _post(msg)
 
 
-def send_scan_results(signals: List[Signal]) -> None:
+def send_scan_results(signals: List[Signal], fear_greed: dict = None) -> None:
     """Send a single compact scan results message (max 5 signals)."""
     from datetime import datetime, timezone
     _LABELS = {
@@ -255,7 +258,10 @@ def send_scan_results(signals: List[Signal]) -> None:
         return ""
 
     now   = datetime.now(tz=timezone.utc).strftime("%b %-d")
-    lines = [f"📡 *Scan — {now}*\n"]
+    fg_line = ""
+    if fear_greed and fear_greed.get("rating") == "Extreme Fear":
+        fg_line = f"\n⚠️ *Extreme Fear* (F&G: {fear_greed['score']}) — only high-conviction picks shown\n"
+    lines = [f"📡 *Scan — {now}*{fg_line}\n"]
     for i, sig in enumerate(signals, 1):
         label  = _LABELS.get(sig["signal_type"], sig["signal_type"])
         detail = _detail(sig)
@@ -360,7 +366,15 @@ def send_portfolio(positions: List[Position]) -> None:
         arrow     = "🟢" if p["pct_change"] >= 0 else "🔴"
         sign      = "+" if p["pct_change"] >= 0 else ""
         sma_arrow = "↑" if p.get("sma150_rising") else "↓"
-        stop      = p["stop"]
+        stop      = p["stop"]  # SMA150-based stop (default)
+
+        # When buy price is below SMA150, use buy-2% as the displayed stop
+        buy_price = p["buy_price"]
+        if buy_price < p["sma150"]:
+            stop         = round(buy_price * 0.98)
+            below_sma_mk = " ❗"
+        else:
+            below_sma_mk = ""
 
         # Alert if computed stop differs from the user's filed stop order
         filed      = stop_orders.get(ticker)
@@ -375,7 +389,7 @@ def send_portfolio(positions: List[Position]) -> None:
         lines.append(
             f"{arrow} *{ticker}* ${p['buy_price']}→{p['current']} ({sign}{p['pct_change']}%)\n"
             f"SMA150: ${p['sma150']}{sma_arrow}\n"
-            f"Stop: ${stop}{stop_alert}{hit}"
+            f"Stop: ${stop}{stop_alert}{below_sma_mk}{hit}"
             f"{total_line}"
         )
 
