@@ -10,7 +10,7 @@ Keys:
                             sell_price, sell_date, pct_pnl, dollar_pnl}]
               (newest first)
 
-Stop level = SMA150 * (1 - STOP_BELOW_SMA) — trails upward as SMA150 rises.
+Stop level: if price <= purchase → purchase*(1-2%); else → max(SMA150, purchase, price*(1-2%)).
 """
 
 import json
@@ -290,7 +290,11 @@ def enrich_positions() -> List[Position]:
             current    = live_prices.get(ticker) or float(df["Close"].iloc[-1])
             sma150     = float(df["sma150"].iloc[-1])
             sma_5ago   = float(df["sma150"].iloc[-6])
-            stop       = round(sma150 * (1 - STOP_BELOW_SMA))
+            purchase   = pos["buy_price"]
+            if current <= purchase:
+                stop = round(purchase * (1 - STOP_BELOW_SMA))
+            else:
+                stop = round(max(sma150, purchase, current * (1 - STOP_BELOW_SMA)))
             pct_chg    = (current - pos["buy_price"]) / pos["buy_price"] * 100
             dollar_chg = (current - pos["buy_price"]) * pos["quantity"]
 
