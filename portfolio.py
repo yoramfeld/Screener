@@ -10,7 +10,7 @@ Keys:
                             sell_price, sell_date, pct_pnl, dollar_pnl}]
               (newest first)
 
-Stop level: if price <= purchase → purchase*(1-2%); else → max(SMA150, purchase, price*(1-2%)).
+Stop level: if price <= purchase → purchase*(1-2%); else → max(purchase, price*(1-2%)).
 """
 
 import json
@@ -295,7 +295,7 @@ def enrich_positions() -> List[Position]:
                 stop        = round(purchase * (1 - STOP_BELOW_SMA))
                 stop_reason = "P-2%"
             else:
-                candidates  = {"SMA": sma150, "P": purchase, "C-2%": current * (1 - STOP_BELOW_SMA)}
+                candidates  = {"P": purchase, "C-2%": current * (1 - STOP_BELOW_SMA)}
                 stop_reason = max(candidates, key=candidates.__getitem__)
                 stop        = round(candidates[stop_reason])
             pct_chg    = (current - pos["buy_price"]) / pos["buy_price"] * 100
