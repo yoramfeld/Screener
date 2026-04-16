@@ -366,15 +366,8 @@ def send_portfolio(positions: List[Position]) -> None:
         arrow     = "🟢" if p["pct_change"] >= 0 else "🔴"
         sign      = "+" if p["pct_change"] >= 0 else ""
         sma_arrow = "↑" if p.get("sma150_rising") else "↓"
-        stop      = p["stop"]  # SMA150-based stop (default)
-
-        # When buy price is below SMA150, use buy-2% as the displayed stop
-        buy_price = p["buy_price"]
-        if buy_price < p["sma150"]:
-            stop         = round(buy_price * 0.98)
-            below_sma_mk = " ❗"
-        else:
-            below_sma_mk = ""
+        stop        = p["stop"]
+        stop_reason = p.get("stop_reason", "")
 
         # Alert if computed stop differs from the user's filed stop order
         filed      = stop_orders.get(ticker)
@@ -389,7 +382,7 @@ def send_portfolio(positions: List[Position]) -> None:
         lines.append(
             f"{arrow} *{ticker}* ${p['buy_price']}→{p['current']} ({sign}{p['pct_change']}%)\n"
             f"SMA150: ${p['sma150']}{sma_arrow}\n"
-            f"Stop: ${stop}{stop_alert}{below_sma_mk}{hit}"
+            f"Stop: ${stop} ({stop_reason}){stop_alert}{hit}"
             f"{total_line}"
         )
 

@@ -292,9 +292,12 @@ def enrich_positions() -> List[Position]:
             sma_5ago   = float(df["sma150"].iloc[-6])
             purchase   = pos["buy_price"]
             if current <= purchase:
-                stop = round(purchase * (1 - STOP_BELOW_SMA))
+                stop        = round(purchase * (1 - STOP_BELOW_SMA))
+                stop_reason = "P-2%"
             else:
-                stop = round(max(sma150, purchase, current * (1 - STOP_BELOW_SMA)))
+                candidates  = {"SMA": sma150, "P": purchase, "C-2%": current * (1 - STOP_BELOW_SMA)}
+                stop_reason = max(candidates, key=candidates.__getitem__)
+                stop        = round(candidates[stop_reason])
             pct_chg    = (current - pos["buy_price"]) / pos["buy_price"] * 100
             dollar_chg = (current - pos["buy_price"]) * pos["quantity"]
 
@@ -312,6 +315,7 @@ def enrich_positions() -> List[Position]:
                 "sma150":            round(sma150, 2),
                 "sma150_rising":     sma150 > sma_5ago,
                 "stop":              round(stop, 2),
+                "stop_reason":       stop_reason,
                 "stop_hit":          current < stop,
                 "atr":               atr_val,
                 "atr_stop":          atr_stop,
