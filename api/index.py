@@ -110,13 +110,16 @@ def _trigger(run_type: str = "screen") -> bool:
     pat = os.environ.get("GITHUB_PAT", "")
     if not pat:
         return False
-    resp = requests.post(
-        _GITHUB_DISPATCH_URL,
-        headers={"Authorization": f"Bearer {pat}", "Accept": "application/vnd.github+json"},
-        json={"ref": "main", "inputs": {"run_type": run_type}},
-        timeout=10,
-    )
-    return resp.status_code == 204
+    try:
+        resp = requests.post(
+            _GITHUB_DISPATCH_URL,
+            headers={"Authorization": f"Bearer {pat}", "Accept": "application/vnd.github+json"},
+            json={"ref": "main", "inputs": {"run_type": run_type}},
+            timeout=4,
+        )
+        return resp.status_code == 204
+    except Exception:
+        return False
 
 
 def _check_stock(ticker: str) -> str:
