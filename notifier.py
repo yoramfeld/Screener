@@ -140,6 +140,37 @@ def _format_signal(sig: Signal) -> str:
             f"{analyst_line}"
             f"{chart}"
         )
+    if sig["signal_type"] == "darvas_breakout":
+        vol_line = "✓ volume confirmed" if sig.get("vol_confirmed") else "volume unconfirmed"
+        return (
+            f"📦 *{sig['ticker']}* — Darvas Box Breakout\n"
+            f"  Price: ${sig['close']}  |  Box: ${sig['box_bottom']} – ${sig['box_top']}\n"
+            f"  Breakout: {sig['breakout_date']}  |  {vol_line}\n"
+            f"  Stop: ${sig['stop_loss']}  |  Risk: {sig['risk_pct']}% from box bottom\n"
+            f"{earnings_line}"
+            f"{analyst_line}"
+            f"{chart}"
+        )
+    if sig["signal_type"] == "darvas_soft_stop":
+        return (
+            f"📦⚠️ *{sig['ticker']}* — Darvas Box: Soft Stop (fell back into box)\n"
+            f"  Price: ${sig['close']}  below box top: ${sig['box_top']}\n"
+            f"  Box bottom: ${sig['box_bottom']}  |  Hard stop: ${sig['stop_loss']}\n"
+            f"  Breakout was {sig['bars_since']}d ago ({sig['breakout_date']})\n"
+            f"{earnings_line}"
+            f"{analyst_line}"
+            f"{chart}"
+        )
+    if sig["signal_type"] == "darvas_hard_stop":
+        return (
+            f"📦🛑 *{sig['ticker']}* — Darvas Box: Hard Stop HIT\n"
+            f"  Price: ${sig['close']}  below box bottom: ${sig['box_bottom']}\n"
+            f"  Stop was: ${sig['stop_loss']}  |  Box top: ${sig['box_top']}\n"
+            f"  Breakout was {sig['bars_since']}d ago ({sig['breakout_date']})\n"
+            f"{earnings_line}"
+            f"{analyst_line}"
+            f"{chart}"
+        )
     # bounce
     return (
         f"📈 *{sig['ticker']}* — SMA150 Bounce\n"
@@ -232,10 +263,13 @@ def send_scan_results(signals: List[Signal], fear_greed: dict = None) -> None:
         "sma_alignment": "SMA Align",
         "high_pullback": "52w Pullback",
         "channel_buy":   "Channel Buy",
-        "death_cross":   "Death Cross",
-        "rsi_overbought":"RSI Overbought",
-        "atr_stop":      "ATR Stop",
-        "channel_sell":  "Channel Sell",
+        "death_cross":      "Death Cross",
+        "rsi_overbought":   "RSI Overbought",
+        "atr_stop":         "ATR Stop",
+        "channel_sell":     "Channel Sell",
+        "darvas_breakout":  "Darvas Breakout",
+        "darvas_soft_stop": "Darvas Soft Stop",
+        "darvas_hard_stop": "Darvas Hard Stop",
     }
 
     def _detail(sig: Signal) -> str:
@@ -255,6 +289,8 @@ def send_scan_results(signals: List[Signal], fear_greed: dict = None) -> None:
             return f"SMA50>{sig['sma150']}>SMA200"
         if st == "atr_buy":
             return f"stop ${sig['atr_stop']}"
+        if st in ("darvas_breakout", "darvas_soft_stop", "darvas_hard_stop"):
+            return f"box ${sig['box_bottom']}–${sig['box_top']}"
         return ""
 
     now   = datetime.now(tz=timezone.utc).strftime("%b %-d")
@@ -276,7 +312,8 @@ def send_scan_results(signals: List[Signal], fear_greed: dict = None) -> None:
 def send_top_buys(signals: List[Signal]) -> None:
     """Send Top 10 buy signals ranked by analyst buy-hold-sell delta."""
     _BUY_TYPES = {"golden_cross", "rsi_oversold", "atr_buy", "sma_alignment",
-                  "high_pullback", "channel_buy", "bounce", "sma150_crossover"}
+                  "high_pullback", "channel_buy", "bounce", "sma150_crossover",
+                  "darvas_breakout"}
     _LABELS = {
         "bounce":        "Bounce",
         "golden_cross":  "Golden Cross",
@@ -284,7 +321,8 @@ def send_top_buys(signals: List[Signal]) -> None:
         "atr_buy":       "ATR Buy",
         "sma_alignment": "SMA Alignment",
         "high_pullback": "52w High Pullback",
-        "channel_buy":   "Channel Buy",
+        "channel_buy":      "Channel Buy",
+        "darvas_breakout":  "Darvas Breakout",
     }
 
     def _delta(sig: Signal) -> int:

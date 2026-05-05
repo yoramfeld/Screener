@@ -234,6 +234,14 @@ def stream_signals(tickers: List[str]) -> Generator[Signal, None, None]:
             if channel:
                 yield channel
 
+            darvas = _evaluate_darvas(ticker, df)
+            if darvas:
+                yield darvas
+
+            darvas_exit = _evaluate_darvas_exit(ticker, df)
+            if darvas_exit:
+                yield darvas_exit
+
         except Exception as exc:
             log.debug("Error processing %s: %s", ticker, exc)
 
@@ -739,6 +747,161 @@ def _evaluate_channel(ticker: str, df: pd.DataFrame, earnings_cache: Optional[di
         }
 
     return None
+
+
+def _find_last_darvas_box(df: pd.DataFrame) -> Optional[dict]:
+    """
+    Scan df for the most recent confirmed Darvas box breakout.
+
+    Box construction:
+      - Top confirmed when the next 3 bars all stay below the candidate high.
+      - Bottom confirmed when the next 3 bars all stay above the candidate low.
+      - Breakout: close above box top within 30 bars of bottom confirmation.
+      - Box failure: any low below box bottom — start over.
+
+    Returns a dict with box geometry and breakout metadata, or None.
+    """
+    highs   = df["High"].values
+    lows    = df["Low"].values
+    closes  = df["Close"].values
+    volumes = df["Volume"].values
+    n       = len(df)
+
+    last_breakout: Optional[dict] = None
+    i = 3
+
+    while i < n - 3:
+        top_candidate = highs[i]
+
+        if (highs[i+1] < top_candidate and
+                highs[i+2] < top_candidate and
+                highs[i+3] < top_candidate):
+
+            box_top           = top_candidate
+            top_confirmed_idx = i + 3
+
+            j = top_confirmed_idx
+            while j < n - 3:
+                bottom_candidate = lows[j]
+
+                if (lows[j+1] > bottom_candidate and
+                        lows[j+2] > bottom_candidate and
+                        lows[j+3] > bottom_candidate):
+
+                    box_bottom           = bottom_candidate
+                    bottom_confirmed_idx = j + 3
+                    avg_vol              = volumes[i:bottom_confirmed_idx].mean()
+
+                    for k in range(bottom_confirmed_idx, min(n, bottom_confirmed_idx + 30)):
+                        if closes[k] > box_top:
+                            last_breakout = {
+                                "box_top":        round(float(box_top), 2),
+                                "box_bottom":     round(float(box_bottom), 2),
+                                "top_idx":        i,
+                                "bottom_idx":     j,
+                                "breakout_idx":   k,
+                                "breakout_price": round(float(closes[k]), 2),
+                                "vol_confirmed":  bool(volumes[k] > avg_vol * 1.5),
+                                "stop_loss":      round(float(box_bottom) * 0.99, 2),
+                                "risk_pct":       round((float(closes[k]) - float(box_bottom)) / float(closes[k]) * 100, 1),
+                            }
+                            i = k
+                            break
+                        if lows[k] < box_bottom:
+                            break
+                    break
+                j += 1
+        i += 1
+
+    return last_breakout
+
+
+def _evaluate_darvas(ticker: str, df: pd.DataFrame) -> Optional[Signal]:
+    """Signal a Darvas box breakout that occurred within the last 5 bars."""
+    df = df.dropna(subset=["Close", "High", "Low", "Volume"])
+    if len(df) < 20:
+        return None
+
+    box = _find_last_darvas_box(df)
+    if box is None:
+        return None
+
+    n = len(df)
+    k = box["breakout_idx"]
+    if n - 1 - k > 5:
+        return None
+
+    dates         = df.index
+    earnings_flag = _has_earnings_soon(ticker)
+    analyst_rec   = _get_analyst_rec(ticker)
+
+    return {
+        "signal_type":     "darvas_breakout",
+        "ticker":          ticker,
+        "close":           box["breakout_price"],
+        "box_top":         box["box_top"],
+        "box_bottom":      box["box_bottom"],
+        "box_top_date":    str(dates[box["top_idx"]].date()),
+        "box_bottom_date": str(dates[box["bottom_idx"]].date()),
+        "breakout_date":   str(dates[k].date()),
+        "vol_confirmed":   box["vol_confirmed"],
+        "stop_loss":       box["stop_loss"],
+        "risk_pct":        box["risk_pct"],
+        "earnings_flag":   earnings_flag,
+        "analyst_rec":     analyst_rec,
+    }
+
+
+def _evaluate_darvas_exit(ticker: str, df: pd.DataFrame) -> Optional[Signal]:
+    """
+    Signal when a recent Darvas breakout is failing.
+
+    Looks back up to 30 bars for the most recent breakout, then checks today:
+      - close < box_bottom  → darvas_hard_stop  (price broke below the stop)
+      - close < box_top     → darvas_soft_stop  (price fell back into the box)
+
+    Not fired during the 5-bar buy-signal window to avoid double-signalling.
+    """
+    df = df.dropna(subset=["Close", "High", "Low", "Volume"])
+    if len(df) < 20:
+        return None
+
+    box = _find_last_darvas_box(df)
+    if box is None:
+        return None
+
+    n          = len(df)
+    k          = box["breakout_idx"]
+    bars_since = n - 1 - k
+
+    if bars_since <= 5 or bars_since > 30:
+        return None
+
+    close = float(df["Close"].iloc[-1])
+
+    if close < box["box_bottom"]:
+        signal_type = "darvas_hard_stop"
+    elif close < box["box_top"]:
+        signal_type = "darvas_soft_stop"
+    else:
+        return None
+
+    dates         = df.index
+    earnings_flag = _has_earnings_soon(ticker)
+    analyst_rec   = _get_analyst_rec(ticker)
+
+    return {
+        "signal_type":   signal_type,
+        "ticker":        ticker,
+        "close":         round(close, 2),
+        "box_top":       box["box_top"],
+        "box_bottom":    box["box_bottom"],
+        "breakout_date": str(dates[k].date()),
+        "stop_loss":     box["stop_loss"],
+        "bars_since":    bars_since,
+        "earnings_flag": earnings_flag,
+        "analyst_rec":   analyst_rec,
+    }
 
 
 def scan_earnings_week(tickers: List[str]) -> List[dict]:
