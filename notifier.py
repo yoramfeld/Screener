@@ -478,6 +478,12 @@ def send_darvas_results(signals: List[Signal]) -> None:
     soft      = [s for s in signals if s["signal_type"] == "darvas_soft_stop"]
     hard      = [s for s in signals if s["signal_type"] == "darvas_hard_stop"]
 
+    # Sort breakouts: volume-confirmed first, then tightest risk (lowest risk_pct)
+    breakouts.sort(key=lambda s: (not s.get("vol_confirmed"), s.get("risk_pct", 99)))
+    # Sort exits: most recent first
+    soft.sort(key=lambda s: s.get("bars_since", 99))
+    hard.sort(key=lambda s: s.get("bars_since", 99))
+
     _MAX = 15  # max signals per group shown
 
     lines = [f"📦 *Darvas Scan — {now}*\n"]
@@ -486,12 +492,11 @@ def send_darvas_results(signals: List[Signal]) -> None:
         shown = breakouts[:_MAX]
         lines.append(f"*Breakouts* ({len(breakouts)})")
         for s in shown:
-            vol   = "✓vol" if s.get("vol_confirmed") else "~vol"
-            chart = f"[Chart]({_tradingview_url(s['ticker'])})"
-            warn  = "  ⚠️" if s.get("earnings_flag") else ""
+            vol  = "✓vol" if s.get("vol_confirmed") else "~vol"
+            warn = "  ⚠️" if s.get("earnings_flag") else ""
             lines.append(
                 f"🟢 *{s['ticker']}* ${s['close']}  box ${s['box_bottom']}–${s['box_top']}  "
-                f"stop ${s['stop_loss']}  {vol}  {chart}{warn}"
+                f"stop ${s['stop_loss']}  {vol}{warn}"
             )
         if len(breakouts) > _MAX:
             lines.append(f"_...and {len(breakouts) - _MAX} more_")
@@ -500,10 +505,9 @@ def send_darvas_results(signals: List[Signal]) -> None:
         shown = soft[:_MAX]
         lines.append(f"\n*Soft Stops — back in box* ({len(soft)})")
         for s in shown:
-            chart = f"[Chart]({_tradingview_url(s['ticker'])})"
             lines.append(
                 f"⚠️ *{s['ticker']}* ${s['close']} < top ${s['box_top']}  "
-                f"hard stop ${s['stop_loss']}  {chart}"
+                f"hard stop ${s['stop_loss']}"
             )
         if len(soft) > _MAX:
             lines.append(f"_...and {len(soft) - _MAX} more_")
@@ -512,9 +516,8 @@ def send_darvas_results(signals: List[Signal]) -> None:
         shown = hard[:_MAX]
         lines.append(f"\n*Hard Stops Hit* ({len(hard)})")
         for s in shown:
-            chart = f"[Chart]({_tradingview_url(s['ticker'])})"
             lines.append(
-                f"🛑 *{s['ticker']}* ${s['close']} < bottom ${s['box_bottom']}  {chart}"
+                f"🛑 *{s['ticker']}* ${s['close']} < bottom ${s['box_bottom']}"
             )
         if len(hard) > _MAX:
             lines.append(f"_...and {len(hard) - _MAX} more_")
