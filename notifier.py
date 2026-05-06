@@ -183,6 +183,10 @@ def _format_signal(sig: Signal) -> str:
     )
 
 
+def send_error(run_type: str, exc: Exception) -> None:
+    _post(f"❌ *{run_type}* scan crashed: `{exc}`")
+
+
 def send_started(total: int) -> None:
     """Send the 'downloading' message before the batch data fetch begins."""
     _post(f"⏳ Downloading stocks data for {total} stocks... it takes a minute.")

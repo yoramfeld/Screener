@@ -163,6 +163,10 @@ if __name__ == "__main__":
     fn = dispatch.get(run_type, run_screen)
     try:
         fn()
-    except Exception:
+    except Exception as exc:
         log.exception("Unhandled error in pipeline")
+        try:
+            notifier.send_error(run_type, exc)
+        except Exception:
+            pass
         sys.exit(1)
