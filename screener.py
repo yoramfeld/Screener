@@ -234,14 +234,6 @@ def stream_signals(tickers: List[str]) -> Generator[Signal, None, None]:
             if channel:
                 yield channel
 
-            darvas = _evaluate_darvas(ticker, df)
-            if darvas:
-                yield darvas
-
-            darvas_exit = _evaluate_darvas_exit(ticker, df)
-            if darvas_exit:
-                yield darvas_exit
-
         except Exception as exc:
             log.debug("Error processing %s: %s", ticker, exc)
 
@@ -918,6 +910,44 @@ def scan_earnings_week(tickers: List[str]) -> List[dict]:
                 "date_str":  info["date_str"],
             })
     results.sort(key=lambda x: x["days_away"])
+    return results
+
+
+def scan_darvas(tickers: List[str]) -> List[Signal]:
+    """Scan universe for Darvas box breakouts and failing breakouts."""
+    if not tickers:
+        return []
+
+    log.info("Downloading data for %d tickers (Darvas scan)...", len(tickers))
+    raw = yf.download(
+        tickers,
+        period="1y",
+        interval="1d",
+        auto_adjust=True,
+        progress=False,
+        group_by="ticker",
+        threads=True,
+    )
+
+    results = []
+    for ticker in tickers:
+        try:
+            df = _extract_ticker(raw, ticker, len(tickers))
+            if df is None or len(df) < 20:
+                continue
+
+            sig = _evaluate_darvas(ticker, df)
+            if sig:
+                results.append(sig)
+                continue  # breakout and exit are mutually exclusive for the same box
+
+            exit_sig = _evaluate_darvas_exit(ticker, df)
+            if exit_sig:
+                results.append(exit_sig)
+        except Exception as exc:
+            log.debug("Darvas error %s: %s", ticker, exc)
+
+    log.info("Darvas scan complete — %d signal(s)", len(results))
     return results
 
 

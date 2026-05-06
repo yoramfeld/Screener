@@ -136,6 +136,12 @@ def run_rec() -> None:
     notifier.send_top_recommendations(results)
 
 
+def run_darvas() -> None:
+    tickers = universe.get_universe()
+    signals = screener.scan_darvas(tickers)
+    notifier.send_darvas_results(signals)
+
+
 def run_earnings() -> None:
     tickers = universe.get_universe()
     matches = screener.scan_earnings_week(tickers)
@@ -152,6 +158,7 @@ if __name__ == "__main__":
         "backtest":  run_backtest,
         "earnings":  run_earnings,
         "rec":       run_rec,
+        "darvas":    run_darvas,
     }
     fn = dispatch.get(run_type, run_screen)
     try:

@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       run_type:
-        description: 'screen | portfolio | pnl | above | backtest | earnings | rec'
+        description: 'screen | portfolio | pnl | above | backtest | earnings | rec | darvas'
         default: screen
 
 jobs:

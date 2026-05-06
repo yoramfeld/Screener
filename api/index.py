@@ -225,6 +225,11 @@ def webhook():
                 _send_message("📊 Scanning S&P 500 analyst recommendations... one moment.")
             else:
                 _send_message("Failed to trigger. Check GITHUB_PAT in Vercel env vars.")
+        elif sub == "darvas":
+            if _trigger("darvas"):
+                _send_message("📦 Scanning for Darvas box breakouts and exits... one moment.")
+            else:
+                _send_message("Failed to trigger. Check GITHUB_PAT in Vercel env vars.")
         elif re.fullmatch(r"[A-Za-z]{1,5}", sub):
             _send_message(_check_stock(sub.upper()))
         else:
@@ -359,6 +364,7 @@ def webhook():
             "`/scan above` — top 20 stocks above rising SMA150\n"
             "`/scan earnings` — earnings calendar for next 7 days\n"
             "`/scan rec` — top 10 S&P 500 analyst picks\n"
+            "`/scan darvas` — Darvas box breakouts & exits\n"
             "`/scan AAPL` — check a specific stock\n"
             "`/scan backtest` — backtest signals on 3 years of data (~5 min)\n\n"
             "*Portfolio*\n"

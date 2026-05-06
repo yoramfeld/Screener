@@ -461,6 +461,52 @@ def send_above(matches: list) -> None:
     _post(header + "\n".join(lines))
 
 
+def send_darvas_results(signals: List[Signal]) -> None:
+    """Send Darvas box scan results — breakouts and failing breakouts."""
+    from datetime import datetime, timezone
+    now = datetime.now(tz=timezone.utc).strftime("%b %-d")
+
+    if not signals:
+        _post(f"📦 *Darvas Scan — {now}*\nNo breakouts or exits found.")
+        return
+
+    breakouts = [s for s in signals if s["signal_type"] == "darvas_breakout"]
+    soft      = [s for s in signals if s["signal_type"] == "darvas_soft_stop"]
+    hard      = [s for s in signals if s["signal_type"] == "darvas_hard_stop"]
+
+    lines = [f"📦 *Darvas Scan — {now}*\n"]
+
+    if breakouts:
+        lines.append("*Breakouts*")
+        for s in breakouts:
+            vol   = "✓vol" if s.get("vol_confirmed") else "~vol"
+            chart = f"[Chart]({_tradingview_url(s['ticker'])})"
+            warn  = "  ⚠️" if s.get("earnings_flag") else ""
+            lines.append(
+                f"🟢 *{s['ticker']}* ${s['close']}  box ${s['box_bottom']}–${s['box_top']}  "
+                f"stop ${s['stop_loss']}  {vol}  {chart}{warn}"
+            )
+
+    if soft:
+        lines.append("\n*Soft Stops* _(back in box)_")
+        for s in soft:
+            chart = f"[Chart]({_tradingview_url(s['ticker'])})"
+            lines.append(
+                f"⚠️ *{s['ticker']}* ${s['close']} < top ${s['box_top']}  "
+                f"hard stop ${s['stop_loss']}  {chart}"
+            )
+
+    if hard:
+        lines.append("\n*Hard Stops Hit*")
+        for s in hard:
+            chart = f"[Chart]({_tradingview_url(s['ticker'])})"
+            lines.append(
+                f"🛑 *{s['ticker']}* ${s['close']} < bottom ${s['box_bottom']}  {chart}"
+            )
+
+    _post("\n".join(lines))
+
+
 def send_top_recommendations(results: list) -> None:
     """Send top S&P 500 stocks by analyst buy consensus."""
     from datetime import datetime, timezone
