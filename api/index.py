@@ -188,63 +188,47 @@ def _market_status() -> str:
 def webhook():
     secret = os.environ.get("WEBHOOK_SECRET", "")
     if secret and request.headers.get("X-Telegram-Bot-Api-Secret-Token") != secret:
-        print("WEBHOOK: secret mismatch — aborting")
         abort(403)
 
     body    = request.get_json(silent=True) or {}
     message = body.get("message", {})
     chat_id = str(message.get("chat", {}).get("id", ""))
 
-    print(f"WEBHOOK: chat_id={chat_id!r} expected={config.TELEGRAM_CHAT_ID!r}")
-
     # Reject anyone who isn't the authorized user — silent drop, no reply
     if chat_id != config.TELEGRAM_CHAT_ID:
-        print("WEBHOOK: chat_id mismatch — dropping")
         return "OK", 200
 
     text  = message.get("text", "").strip()
     parts = text.split()
     cmd   = parts[0].lower() if parts else ""
 
-    print(f"WEBHOOK: cmd={cmd!r}")
-
     # ------------------------------------------------------------------ /scan
     if cmd in ("/scan", "/run"):
         sub = parts[1].lower() if len(parts) > 1 else ""
         if sub == "backtest":
-            ok = _trigger("backtest")
-            print(f"WEBHOOK: trigger backtest → {ok}")
-            if ok:
+            if _trigger("backtest"):
                 _send_message("📊 Running backtest on 3 years of data... takes ~5 min.")
             else:
                 _send_message("Failed to trigger. Check GITHUB_PAT in Vercel env vars.")
         elif sub == "above":
-            ok = _trigger("above")
-            print(f"WEBHOOK: trigger above → {ok}")
-            if ok:
+            if _trigger("above"):
                 _send_message("📶 Scanning for stocks above SMA150... one moment.")
             else:
                 _send_message("Failed to trigger. Check GITHUB_PAT in Vercel env vars.")
         elif sub == "earnings":
-            ok = _trigger("earnings")
-            print(f"WEBHOOK: trigger earnings → {ok}")
-            if ok:
+            if _trigger("earnings"):
                 _send_message("📅 Scanning earnings calendar for the next 7 days...")
             else:
                 _send_message("Failed to trigger. Check GITHUB_PAT in Vercel env vars.")
         elif sub == "rec":
-            ok = _trigger("rec")
-            print(f"WEBHOOK: trigger rec → {ok}")
-            if ok:
+            if _trigger("rec"):
                 _send_message("📊 Scanning S&P 500 analyst recommendations... one moment.")
             else:
                 _send_message("Failed to trigger. Check GITHUB_PAT in Vercel env vars.")
         elif re.fullmatch(r"[A-Za-z]{1,5}", sub):
             _send_message(_check_stock(sub.upper()))
         else:
-            ok = _trigger("screen")
-            print(f"WEBHOOK: trigger screen → {ok}")
-            if ok:
+            if _trigger("screen"):
                 _send_message("⏳ Downloading stocks data... it takes a minute.")
             else:
                 _send_message("Failed to trigger. Check GITHUB_PAT in Vercel env vars.")
