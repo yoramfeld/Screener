@@ -466,61 +466,29 @@ def send_above(matches: list) -> None:
 
 
 def send_darvas_results(signals: List[Signal]) -> None:
-    """Send Darvas box scan results — breakouts and failing breakouts."""
+    """Send top 5 Darvas box breakout opportunities."""
     from datetime import datetime, timezone
     now = datetime.now(tz=timezone.utc).strftime("%b %-d")
 
-    if not signals:
-        _post(f"📦 *Darvas Scan — {now}*\nNo breakouts or exits found.")
+    breakouts = [s for s in signals if s["signal_type"] == "darvas_breakout"]
+
+    if not breakouts:
+        _post(f"📦 *Darvas Scan — {now}*\nNo breakouts found.")
         return
 
-    breakouts = [s for s in signals if s["signal_type"] == "darvas_breakout"]
-    soft      = [s for s in signals if s["signal_type"] == "darvas_soft_stop"]
-    hard      = [s for s in signals if s["signal_type"] == "darvas_hard_stop"]
-
-    # Sort breakouts: volume-confirmed first, then tightest risk (lowest risk_pct)
+    # Rank: volume-confirmed first, then tightest risk (lowest risk_pct = stop closest to entry)
     breakouts.sort(key=lambda s: (not s.get("vol_confirmed"), s.get("risk_pct", 99)))
-    # Sort exits: most recent first
-    soft.sort(key=lambda s: s.get("bars_since", 99))
-    hard.sort(key=lambda s: s.get("bars_since", 99))
+    top5 = breakouts[:5]
 
-    _MAX = 15  # max signals per group shown
-
-    lines = [f"📦 *Darvas Scan — {now}*\n"]
-
-    if breakouts:
-        shown = breakouts[:_MAX]
-        lines.append(f"*Breakouts* ({len(breakouts)})")
-        for s in shown:
-            vol  = "✓vol" if s.get("vol_confirmed") else "~vol"
-            warn = "  ⚠️" if s.get("earnings_flag") else ""
-            lines.append(
-                f"🟢 *{s['ticker']}* ${s['close']}  box ${s['box_bottom']}–${s['box_top']}  "
-                f"stop ${s['stop_loss']}  {vol}{warn}"
-            )
-        if len(breakouts) > _MAX:
-            lines.append(f"_...and {len(breakouts) - _MAX} more_")
-
-    if soft:
-        shown = soft[:_MAX]
-        lines.append(f"\n*Soft Stops — back in box* ({len(soft)})")
-        for s in shown:
-            lines.append(
-                f"⚠️ *{s['ticker']}* ${s['close']} < top ${s['box_top']}  "
-                f"hard stop ${s['stop_loss']}"
-            )
-        if len(soft) > _MAX:
-            lines.append(f"_...and {len(soft) - _MAX} more_")
-
-    if hard:
-        shown = hard[:_MAX]
-        lines.append(f"\n*Hard Stops Hit* ({len(hard)})")
-        for s in shown:
-            lines.append(
-                f"🛑 *{s['ticker']}* ${s['close']} < bottom ${s['box_bottom']}"
-            )
-        if len(hard) > _MAX:
-            lines.append(f"_...and {len(hard) - _MAX} more_")
+    lines = [f"📦 *Darvas Scan — {now}*  _{len(breakouts)} breakout(s) found_\n"]
+    for i, s in enumerate(top5, 1):
+        vol  = "✓vol" if s.get("vol_confirmed") else "~vol"
+        warn = "  ⚠️" if s.get("earnings_flag") else ""
+        lines.append(
+            f"{i}. *{s['ticker']}* ${s['close']}  "
+            f"box ${s['box_bottom']}–${s['box_top']}  "
+            f"stop ${s['stop_loss']}  {vol}{warn}"
+        )
 
     # Split into ≤4000-char chunks to stay under Telegram's limit
     msg   = "\n".join(lines)
