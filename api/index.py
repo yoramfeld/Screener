@@ -115,7 +115,7 @@ def _trigger(run_type: str = "screen") -> bool:
             _GITHUB_DISPATCH_URL,
             headers={"Authorization": f"Bearer {pat}", "Accept": "application/vnd.github+json"},
             json={"ref": "main", "inputs": {"run_type": run_type}},
-            timeout=4,
+            timeout=8,
         )
         return resp.status_code == 204
     except Exception:
