@@ -782,7 +782,14 @@ def _find_last_darvas_box(df: pd.DataFrame) -> Optional[dict]:
 
                     box_bottom           = bottom_candidate
                     bottom_confirmed_idx = j + 3
-                    avg_vol              = volumes[i:bottom_confirmed_idx].mean()
+
+                    # Quality filters: minimum 10-bar duration, max 15% width
+                    box_duration = bottom_confirmed_idx - i
+                    box_width    = (box_top - box_bottom) / box_bottom
+                    if box_duration < 10 or box_width > 0.15:
+                        break
+
+                    avg_vol = volumes[i:bottom_confirmed_idx].mean()
 
                     for k in range(bottom_confirmed_idx, min(n, bottom_confirmed_idx + 30)):
                         if closes[k] > box_top:
@@ -821,6 +828,20 @@ def _evaluate_darvas(ticker: str, df: pd.DataFrame) -> Optional[Signal]:
     n = len(df)
     k = box["breakout_idx"]
     if n - 1 - k > 5:
+        return None
+
+    # Minimum price filter
+    if box["breakout_price"] < 10:
+        return None
+
+    # Uptrend filter: breakout price must be above SMA50
+    sma50 = df["Close"].rolling(50).mean()
+    if pd.isna(sma50.iloc[-1]) or box["breakout_price"] < float(sma50.iloc[-1]):
+        return None
+
+    # Near 52-week high: box top must be within 20% of the 52-week high
+    high_52w = float(df["High"].iloc[-252:].max()) if len(df) >= 252 else float(df["High"].max())
+    if box["box_top"] < high_52w * 0.80:
         return None
 
     dates         = df.index
