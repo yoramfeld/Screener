@@ -478,11 +478,14 @@ def send_darvas_results(signals: List[Signal]) -> None:
     soft      = [s for s in signals if s["signal_type"] == "darvas_soft_stop"]
     hard      = [s for s in signals if s["signal_type"] == "darvas_hard_stop"]
 
+    _MAX = 15  # max signals per group shown
+
     lines = [f"📦 *Darvas Scan — {now}*\n"]
 
     if breakouts:
-        lines.append("*Breakouts*")
-        for s in breakouts:
+        shown = breakouts[:_MAX]
+        lines.append(f"*Breakouts* ({len(breakouts)})")
+        for s in shown:
             vol   = "✓vol" if s.get("vol_confirmed") else "~vol"
             chart = f"[Chart]({_tradingview_url(s['ticker'])})"
             warn  = "  ⚠️" if s.get("earnings_flag") else ""
@@ -490,25 +493,43 @@ def send_darvas_results(signals: List[Signal]) -> None:
                 f"🟢 *{s['ticker']}* ${s['close']}  box ${s['box_bottom']}–${s['box_top']}  "
                 f"stop ${s['stop_loss']}  {vol}  {chart}{warn}"
             )
+        if len(breakouts) > _MAX:
+            lines.append(f"_...and {len(breakouts) - _MAX} more_")
 
     if soft:
-        lines.append("\n*Soft Stops* _(back in box)_")
-        for s in soft:
+        shown = soft[:_MAX]
+        lines.append(f"\n*Soft Stops — back in box* ({len(soft)})")
+        for s in shown:
             chart = f"[Chart]({_tradingview_url(s['ticker'])})"
             lines.append(
                 f"⚠️ *{s['ticker']}* ${s['close']} < top ${s['box_top']}  "
                 f"hard stop ${s['stop_loss']}  {chart}"
             )
+        if len(soft) > _MAX:
+            lines.append(f"_...and {len(soft) - _MAX} more_")
 
     if hard:
-        lines.append("\n*Hard Stops Hit*")
-        for s in hard:
+        shown = hard[:_MAX]
+        lines.append(f"\n*Hard Stops Hit* ({len(hard)})")
+        for s in shown:
             chart = f"[Chart]({_tradingview_url(s['ticker'])})"
             lines.append(
                 f"🛑 *{s['ticker']}* ${s['close']} < bottom ${s['box_bottom']}  {chart}"
             )
+        if len(hard) > _MAX:
+            lines.append(f"_...and {len(hard) - _MAX} more_")
 
-    _post("\n".join(lines))
+    # Split into ≤4000-char chunks to stay under Telegram's limit
+    msg   = "\n".join(lines)
+    chunk = ""
+    for line in msg.split("\n"):
+        if len(chunk) + len(line) + 1 > 4000:
+            _post(chunk)
+            chunk = line
+        else:
+            chunk = chunk + "\n" + line if chunk else line
+    if chunk:
+        _post(chunk)
 
 
 def send_top_recommendations(results: list) -> None:

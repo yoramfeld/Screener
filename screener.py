@@ -869,12 +869,21 @@ def _evaluate_darvas_exit(ticker: str, df: pd.DataFrame) -> Optional[Signal]:
     if bars_since <= 5 or bars_since > 30:
         return None
 
-    close = float(df["Close"].iloc[-1])
+    close      = float(df["Close"].iloc[-1])
+    close_prev = float(df["Close"].iloc[-2])
 
     if close < box["box_bottom"]:
-        signal_type = "darvas_hard_stop"
+        # Hard stop: only on the day price first closes below box bottom
+        if close_prev >= box["box_bottom"]:
+            signal_type = "darvas_hard_stop"
+        else:
+            return None
     elif close < box["box_top"]:
-        signal_type = "darvas_soft_stop"
+        # Soft stop: only on the day price first closes back below box top
+        if close_prev >= box["box_top"]:
+            signal_type = "darvas_soft_stop"
+        else:
+            return None
     else:
         return None
 
