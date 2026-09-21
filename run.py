@@ -12,7 +12,6 @@ Exits with code 0 on success, code 1 on error.
 import logging
 import os
 import sys
-from datetime import datetime, timezone
 
 import backtest
 import database
@@ -27,34 +26,8 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-_MARKET_OPEN_UTC  = (14, 30)
-_MARKET_CLOSE_UTC = (21,  0)
-
-_HOLIDAYS = {
-    # NYSE holidays 2026
-    "2026-01-01", "2026-01-19", "2026-02-16", "2026-04-03",
-    "2026-05-25", "2026-07-03", "2026-09-07", "2026-11-26", "2026-12-25",
-    # NYSE holidays 2027
-    "2027-01-01", "2027-01-18", "2027-02-15", "2027-03-26",
-    "2027-05-31", "2027-07-05", "2027-09-06", "2027-11-25", "2027-12-24",
-}
-
-
-def _market_is_open() -> bool:
-    now      = datetime.now(tz=timezone.utc)
-    date_str = now.strftime("%Y-%m-%d")
-    if date_str in _HOLIDAYS:
-        return False
-    t = (now.hour, now.minute)
-    return _MARKET_OPEN_UTC <= t <= _MARKET_CLOSE_UTC
-
 
 def run_screen() -> None:
-    is_manual = os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch"
-    if not is_manual and not _market_is_open():
-        log.info("Market closed or holiday — exiting")
-        return
-
     if not screener.market_is_healthy():
         notifier.send_summary([], aborted=True)
         log.warning("Run aborted: SPY below threshold")
