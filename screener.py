@@ -198,10 +198,13 @@ def stream_signals(tickers: List[str]) -> Generator[Signal, None, None]:
     )
 
     earnings_cache: dict = {}  # shared across tickers for the channel scanner
+    total = len(tickers)
 
-    for ticker in tickers:
+    for i, ticker in enumerate(tickers, 1):
+        if i == 1 or i % 25 == 0 or i == total:
+            log.info("Scanning %d/%d ...", i, total)
         try:
-            df = _extract_ticker(raw, ticker, len(tickers))
+            df = _extract_ticker(raw, ticker, total)
 
             if df is None or len(df) < 205:
                 continue
