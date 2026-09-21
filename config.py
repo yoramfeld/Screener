@@ -36,6 +36,9 @@ GITHUB_PAT: str = os.environ.get("GITHUB_PAT", "")          # needs 'actions' sc
 # --- SQLite dedup ---
 DB_PATH: str = os.environ.get("DB_PATH", "alerts.db")
 
+# --- Dry-run (print to stdout instead of Telegram) ---
+DRY_RUN: bool = os.environ.get("DRY_RUN", "").lower() in ("1", "true", "yes")
+
 # --- Screener knobs ---
 ALERT_COOLDOWN_DAYS: int = int(os.environ.get("ALERT_COOLDOWN_DAYS", "1"))
 CROSS_LOOKBACK_DAYS: int = int(os.environ.get("CROSS_LOOKBACK_DAYS", "3"))

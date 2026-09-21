@@ -198,7 +198,11 @@ def send_signal(sig: Signal) -> None:
 
 
 def _post(text: str) -> None:
-    """Raw Telegram send."""
+    """Raw Telegram send — or print to stdout when DRY_RUN=1."""
+    if config.DRY_RUN:
+        print(text)
+        print()
+        return
     if not config.TELEGRAM_BOT_TOKEN or not config.TELEGRAM_CHAT_ID:
         log.error("Telegram credentials not configured")
         return
