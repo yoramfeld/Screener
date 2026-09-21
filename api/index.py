@@ -206,37 +206,31 @@ def webhook():
     if cmd in ("/scan", "/run"):
         sub = parts[1].lower() if len(parts) > 1 else ""
         if sub == "backtest":
-            if _trigger("backtest"):
-                _send_message("📊 Running backtest on 3 years of data... takes ~5 min.")
-            else:
-                _send_message("Failed to trigger. Check GITHUB_PAT in Vercel env vars.")
+            _send_message("📊 Running backtest on 3 years of data... takes ~5 min.")
+            if not _trigger("backtest"):
+                _send_message("❌ Failed to trigger. Check GITHUB_PAT in Vercel env vars.")
         elif sub == "above":
-            if _trigger("above"):
-                _send_message("📶 Scanning for stocks above SMA150... one moment.")
-            else:
-                _send_message("Failed to trigger. Check GITHUB_PAT in Vercel env vars.")
+            _send_message("📶 Scanning for stocks above SMA150... one moment.")
+            if not _trigger("above"):
+                _send_message("❌ Failed to trigger. Check GITHUB_PAT in Vercel env vars.")
         elif sub == "earnings":
-            if _trigger("earnings"):
-                _send_message("📅 Scanning earnings calendar for the next 7 days...")
-            else:
-                _send_message("Failed to trigger. Check GITHUB_PAT in Vercel env vars.")
+            _send_message("📅 Scanning earnings calendar for the next 7 days...")
+            if not _trigger("earnings"):
+                _send_message("❌ Failed to trigger. Check GITHUB_PAT in Vercel env vars.")
         elif sub == "rec":
-            if _trigger("rec"):
-                _send_message("📊 Scanning S&P 500 analyst recommendations... one moment.")
-            else:
-                _send_message("Failed to trigger. Check GITHUB_PAT in Vercel env vars.")
+            _send_message("📊 Scanning S&P 500 analyst recommendations... one moment.")
+            if not _trigger("rec"):
+                _send_message("❌ Failed to trigger. Check GITHUB_PAT in Vercel env vars.")
         elif sub == "darvas":
-            if _trigger("darvas"):
-                _send_message("📦 Scanning for Darvas box breakouts and exits... one moment.")
-            else:
-                _send_message("Failed to trigger. Check GITHUB_PAT in Vercel env vars.")
+            _send_message("📦 Scanning for Darvas box breakouts and exits... one moment.")
+            if not _trigger("darvas"):
+                _send_message("❌ Failed to trigger. Check GITHUB_PAT in Vercel env vars.")
         elif re.fullmatch(r"[A-Za-z]{1,5}", sub):
             _send_message(_check_stock(sub.upper()))
         else:
-            if _trigger("screen"):
-                _send_message("⏳ Downloading stocks data... it takes a minute.")
-            else:
-                _send_message("Failed to trigger. Check GITHUB_PAT in Vercel env vars.")
+            _send_message("⏳ Scanning all stocks... results in ~1 min.")
+            if not _trigger("screen"):
+                _send_message("❌ Failed to trigger. Check GITHUB_PAT in Vercel env vars.")
 
     # ------------------------------------------------------------------ /p
     elif cmd == "/p":
