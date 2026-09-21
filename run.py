@@ -14,6 +14,7 @@ import os
 import sys
 
 import backtest
+import config
 import database
 import notifier
 import portfolio
@@ -122,6 +123,10 @@ def run_earnings() -> None:
 
 
 if __name__ == "__main__":
+    if not config.DRY_RUN and (not config.TELEGRAM_BOT_TOKEN or not config.TELEGRAM_CHAT_ID):
+        log.error("TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID must be set (or use DRY_RUN=1)")
+        sys.exit(1)
+
     run_type = os.environ.get("RUN_TYPE", "screen")
     dispatch = {
         "screen":    run_screen,
