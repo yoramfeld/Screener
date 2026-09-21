@@ -17,12 +17,16 @@ Returns a list of Signal dicts — one per qualifying ticker.
 """
 
 import logging
+import warnings
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Generator, List, Optional
 
 import pandas as pd
 import requests
 import yfinance as yf
+
+warnings.filterwarnings("ignore", category=pd.errors.SettingWithCopyWarning)
+warnings.filterwarnings("ignore", category=FutureWarning)
 
 import config
 
