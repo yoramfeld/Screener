@@ -210,32 +210,12 @@ def stream_signals(tickers: List[str]) -> Generator[Signal, None, None]:
             if bounce:
                 yield bounce
 
-            crossover = _evaluate_sma150_crossover(ticker, df)
-            if crossover:
-                yield crossover
-
             cross = _evaluate_cross(ticker, df)
-            if cross:
+            if cross and cross["signal_type"] == "golden_cross":
                 yield cross
 
-            rsi = _evaluate_rsi(ticker, df)
-            if rsi:
-                yield rsi
-
-            alignment = _evaluate_sma_alignment(ticker, df)
-            if alignment:
-                yield alignment
-
-            pullback = _evaluate_high_pullback(ticker, df)
-            if pullback:
-                yield pullback
-
-            atr = _evaluate_atr_trailing(ticker, df)
-            if atr:
-                yield atr
-
             channel = _evaluate_channel(ticker, df, earnings_cache)
-            if channel:
+            if channel and channel["signal_type"] == "channel_buy":
                 yield channel
 
         except Exception as exc:

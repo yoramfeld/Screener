@@ -22,7 +22,7 @@ from screener import _extract_ticker, _calc_rsi, _calc_atr, _calc_atr_stop
 log = logging.getLogger(__name__)
 
 HOLD_DAYS    = [5, 10, 20]
-SIGNAL_TYPES = ["bounce", "golden_cross", "death_cross", "rsi_oversold", "rsi_overbought", "sma_alignment", "high_pullback", "atr_buy", "atr_stop"]
+SIGNAL_TYPES = ["bounce", "golden_cross"]
 DEDUP_DAYS   = 20   # suppress repeat signal on same ticker for this many bars
 
 
